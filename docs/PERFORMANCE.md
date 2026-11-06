@@ -14,8 +14,9 @@ The harness is in [`tools/perf/`](../tools/perf):
 | `inappfps.py` | In-app boot to lock screen, then Home ↔ Spotlight swipes; delivered fps from SurfaceFlinger `--timestats` for the guest SurfaceView (`--idle SECS` adds idle engine CPU). |
 | `gamefps.py SECS` | Delivered fps while a game runs on screen. |
 | `fcbench.py APK SECS [GAME]` | Installs an APK, boots, unlocks, starts a game from Home page 2; presets follow each phone's layout (Poco: `jetpack`, `flightcontrol`; Pixel: `jellycar`, `doodlejump`; a game that holds a steady 60 on both phones leaves the benchmark set, so Flight Control, Doodle Jump and JellyCar are no longer run; check with `FC_SHOT=file.png`) and runs `gamefps.py`. Debug builds read `files/debug-env` (`KEY=VALUE`), e.g. `LT_CROSS_PAGE_CHAIN=off` or `LT_ADPF=off`, for same-APK A/B runs. |
+| `version-apk.sh VERSION` | Builds a released version as a side-by-side APK (`org.lighttouch.android.vXYZ`, "LightTouch VERSION", non-debuggable) laid out like a release build, so its engine matches the release's (the engine profile matches functions by source path). For A/B tests between versions on one phone. |
+| `versionab.py OUT GAME SECS ROUNDS PKG...` | Game fps between installed versions: rounds alternate the order, one guest runs at a time (Home, then Stop, after each run), with a rest between runs; per-second series, screenshots and a summary in `OUT`. The tools take `LT_PKG` for a side-by-side install; `fcbench.py -` measures what is installed. |
 | `framestats.py` | Frame pacing from a per-frame log: the **ceiling** (95th percentile of 500 ms windows: what the game sustains when nothing gets in the way), median, **low** (5th percentile: how deep the dips go), 1% low, **hitches** (frames over 50 ms), share of time at ≥55 / <30 fps, and a chart. `fcbench.py` with `FC_FRAMES=chart.png` turns on the runtime's `LT_FRAME_LOG` and reports it for the same window. Given the engine's `IT_FRAME_TRACE` (with `IT_VCPU_ACCT` and `IT_GLES_PROF`) it also splits each class of frame (on time / late / hitch) into guest code, GL, BQL wait, idle and off-CPU time. |
-| `guestsyslog.py` | Desktop: the guest's syslog during a headless run (through the app's USB bridge), counted by sender and text. Every line an app writes to stderr becomes a syslogd message the guest has to relay and parse. |
 | `androidsyslog.py` | Android: the guest's syslog for 1–600 s through the app's USB bridge, with receive times on the same clock as the frame logs. |
 | `guestprocs.py` | Guest process, task and pmap pointers read with LLDB through `LT_GUEST_GDB_PORT`, to name the guest threads in a capture ([PROFILING.md](PROFILING.md)). |
 | `gameprof.sh` / `inappprof.sh` | `simpleperf` of the `:engine` process during play / swipes: per-thread split, vCPU DSOs and symbols. |
@@ -31,10 +32,9 @@ window can be analysed again with `framestats.py frames.log --secs 30`. Use `fcb
 to launch LT Bench without sampling fps on its static results screen.
 
 **What full speed is.** The iPod touch 2G panel refreshes at 60 Hz, and a game's own cap is
-60 or 30 fps. Find a game's cap on a host fast enough to reach it: the Linux frontend runs the
-phone's record headless (`lighttouch-linux --library DIR --record ID --engine libqemu-arm.so
---headless --seconds N --no-audio --script FILE`, with timed `touch`/`button`/`screenshot`
-lines) and its `status` lines carry the produced frame count. On a Ryzen 7 3700X, Flight
+60 or 30 fps. Find a game's cap on a host fast enough to reach it: the desktop app runs a record
+headless (`lighttouch run ID --seconds N --script FILE`, with timed touch and button commands) and its
+status lines carry the produced frame count. On a Ryzen 7 3700X, Flight
 Control 1.9.2 holds **60 fps** throughout play, so it targets 60: the phones' ~18–25 fps are
 30–40% of full speed.
 
@@ -311,6 +311,24 @@ its MBX GPU model (only stock OpenGLES composites on it; with our GL front end S
 the NAND image store (a storage format change for the Mac app's records) and the n72 boot-args rework (7E18
 boots unchanged).
 
+### Un1box review of 2026-10-25
+
+[KlugKlugTG/Un1box](https://github.com/KlugKlugTG/Un1box), a fork of this repository, carries its engine
+changes as patch files applied in CI, all unmeasured there. Each was checked against the iPod touch 4G on the
+Poco F3 and written into our own sources where it helps:
+
+| Their change | What we did |
+| --- | --- |
+| The Android presenter swaps R and B four pixels at a time on arm64 (`978bbefe`) | Taken, app `e1ade586`, for any unscaled row (not only a buffer whose stride equals its width). A 960x640 frame: 0.58 → 0.17 ms on a big core, 0.71 → 0.19 ms on a mid core, identical output. The presenter thread is ~5% of a core in Jetpack. |
+| `APPLE_fence` as EGL fence syncs instead of a `glFinish` per call (`478fbe51`) | Taken, engine `b6d540caf9` (`LT_GLES_APPLE_FENCE=glfinish` for A/B). No measured gain: Jetpack makes no fence calls, and Epic Citadel, Infinity Blade II, Asphalt 5 and 8 and Battle Bears do not import the extension. It only helps a game that uses fences. |
+| The inlined TB lookup and the indirect side table on by default (`a02def4c`) | Not yet. Jetpack title, ABBAAB 60 s at 2.24 GHz: 58.9/58.9/58.9 → 59.0/58.3/58.8 fps, 29.7 → 29.4 Mcycles a frame, late frames and p99 unchanged. Still an open lead in [TODO.md](TODO.md). |
+| Huge pages for guest RAM (same commit) | Not taken: the Poco's kernel has no transparent huge pages, so it would do nothing there. The Pixel is not checked yet. |
+| A misaligned `LDM`/`STM` performed instead of faulting (`2f0c5ac5`) | Not taken. Their evidence is our iPod touch 2G measurement ("Hitches in Jetpack's title" below). Jetpack's title on the 4G takes no alignment faults, with audio playing (150 s on the desktop), so there is nothing to win there, and it departs from the hardware. |
+| Presenter and vsync threads at display priority (`478fbe51`) | Not taken yet: unmeasured there, and the presenter is ~5% of a core here. |
+| The synchronous present waits on a native fence; a frame's pages mapped once; no `glFinish` before the readback (`7ea1b8a8`, `59da7ef0`) | Not taken: these are fallback paths (`LT_PRESENT_ASYNC=off`, 16-bit surfaces, drivers without AHardwareBuffer). The 4G's default present is the asynchronous one. |
+| One guest read per draw for interleaved ES 1.1 arrays (`5e0f9243`) | Taken on `develop` as engine `ea870ad2a3` with `LT_GLES_DRAW_POOL=off` (`6ec1cbabfa`); no gain measured. With the GL thread on, the vCPU already reads a draw's arrays ahead and the worker reads that copy, so the change only saves copies on the worker. **Poco, Jetpack title (capped at 60), four interleaved pairs: pool on 58.5/59.6/59.8/59.7 fps, 2.1% of frames late; off 59.7/59.7/59.0/59.3, 2.0%.** An uncapped ES 1.1 scene (Real Racing's race) is the test still to run before it ships. |
+| "Fewer pauses when opening iOS apps" (`f84b1bec`) | Taken as an opt-in Settings switch, off by default: on, it turns off the two code-cache flushes measured above as gains (`LT_FLUSH_ON_APP`, `LT_FLUSH_SETTLE`). |
+
 ### Measured and rejected
 
 **iPod touch 4G, 2026-10-25 (TLB and jump-cache sizes).** Poco, Epic Citadel's tour, 120 s windows, eight runs
@@ -437,8 +455,8 @@ with `tools/perf/gameprof.sh`, and map JIT samples to guest PCs with the perf ma
 the guest's time is ~50% kernel (IPC, scheduling, timers), ~41% shared cache, ~8.5% the game itself.
 That split was taken while the GL shim still wrote to syslog on every frame (fixed in `7f744e80cc`,
 above): a share of that kernel IPC and shared-cache time was syslogd and launchd handling the shim's
-log. **Check the guest syslog when a profile shows system daemons**: `tools/perf/guestsyslog.py`
-reads it through the app-services bridge on the desktop and counts lines by sender; look for per-frame lines.
+log. **Check the guest syslog when a profile shows system daemons** (`tools/perf/androidsyslog.py` reads it through
+the app's USB bridge and counts lines by sender); look for per-frame lines.
 
 **Jetpack Joyride, instruction by instruction (2026-10-23, desktop, gameplay).** Counting every guest instruction (`LT_ICOUNT`) and every translated block's runs (`LT_TBPROF`; TEMP tools, `perf/n81/temp-tbprof-icount-flush.patch`): a frame is ~2M guest instructions, 64% of them in the kernel. A third of all instructions are IOKit walking the scaler's and the framebuffer's pages for DMA (`IODMACommand::genIOVMSegments`, ~1800 pages a frame), but those tight loops take only 4% of the vCPU's cycles. Cost per instruction depends on how often its block runs: 0.45 ns in blocks that run over 100 times a frame, 1.6 ns at 10–100, 3.8 ns at 1–10, 6.5 ns below once a frame. The generated code is ~62 bytes per guest instruction (~10 host instructions, standard for TCG), the code cache holds ~430 MB by the time the game starts, and instruction-fetch misses outnumber data misses about 2.4 to 1. Making blocks bigger costs speed on the desktop (256 jumped-over bytes per block: −16% frames; 88 executed bytes: −5%), but not on the Poco (32 executed bytes: 29.1/29.3 → 28.5/30.9 fps), and making them smaller did not buy any (stubs above), and flushing the cache so the game's code is packed together helped only a few percent once retranslation settled (cycles per instruction 1.13 → 1.08). The remaining host-side time on the Poco (30%) is spread thin: TLB refills 5%, float vector helpers 5%, block lookup 3%.
 
@@ -499,7 +517,7 @@ Epic Citadel's guided tour (`fcbench.py APK 60 n81-ec-tour`) on the Poco: ~44 fp
 when the phone is hot. What was checked:
 
 - **The 1% low is real.** The game's own present intervals (frame path, its GL context) give the same 1% low
-  as the frames Un1box publishes, so reading the display does not invent it. Published intervals are
+  as the frames LightTouch publishes, so reading the display does not invent it. Published intervals are
   multiples of the 60 Hz vsync, as on the device: the game presents at 16–36 ms and backboardd composites on
   the vsync.
 - **Slow frames are more guest work, not waiting.** The vCPU is ~97% busy in fast and slow frames alike. A

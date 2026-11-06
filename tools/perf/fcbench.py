@@ -2,6 +2,7 @@
 """Game fps for an APK: install it, boot to the lock screen, unlock, open Home page 2, run a
 game's launch steps and measure delivered fps with gamefps.py.
 usage: fcbench.py APK [SECONDS] [GAME] (ANDROID_SERIAL set; the game installed in the guest)
+APK "-" measures the installed app as it is; LT_PKG names a side-by-side install (org.lighttouch.android.NAME).
 GAME: a preset below, default jetpack (Jetpack Joyride's title); each follows one phone's Home page 2 (Poco since
 2026-10-20: Doodle Jump, Flight Control, JellyCar, Jetpack / Bike or Die!, Cut the Rope, N.O.V.A., Asphalt 5; Pixel:
 Doodle Jump, JellyCar). Check what was measured with FC_SHOT=file.png; FC_SERIES=1 prints fps per second.
@@ -41,6 +42,8 @@ GAMES = {
     # Real Racing, Flight Control, Asphalt 5 on the Poco's record.
     "n81-doodlejump": [(.15, .31), 30],                    # Doodle Jump's title
     "n81-jetpack": [(.86, .14), 50],                       # Jetpack Joyride's title
+    # The same when Game Center's sign-in sheet covers the title: Cancel it if it comes, then settle.
+    "n81-jetpack-gc": [(.86, .14), 15, "gc", 30],
     # a run: "touch anywhere to play", then "fly" holds and releases the screen through the measurement
     # (a run lasts ~20 s on the desktop; measure ~15)
     "n81-jetpack-play": [(.86, .14), 50, (.5, .5), 3, "fly"],
@@ -49,6 +52,13 @@ GAMES = {
     "n81-flightcontrol": [(.62, .31), 35, (.233, .6), 4, (.158, .616, 1000), 8],
     "n81-realracing": [(.39, .31), 60],
     "n81-realracing-race": [(.39, .31), 60, (.45, .23), 16, (.58, .47), 10, (.45, .18), 7, (.45, .13), 7, (.51, .5), 30],  # Quick Race                    # Real Racing's attract demo (a race replay)
+    # A freshly prepared iPod touch 4G 6.1.6 with only Real Racing installed (versionab.py's devices): Home page 2 =
+    # Stocks, Utilities, Real Racing.
+    "n81new-realracing": [(.62, .14), 60],
+    # Quick Race once Real Racing's first-run notices are dismissed and saved (one manual pass per new device, ending
+    # with Home so the game saves them): icon, the menu, QUICK RACE, the track, Division C, Hatch, the car, then the
+    # race (in-car camera).
+    "n81new-realracing-race": [(.62, .14), 60, (.46, .22), 12, (.58, .47), 10, (.45, .18), 7, (.45, .13), 7, (.51, .5), 30],
     "n81-epiccitadel": [(.62, .14), 150],                  # Epic Citadel's flythrough, after its green loading screen
     # Epic Citadel's Guided Tour (Poco page 2): icon, intro flyby, dismiss the welcome panel, the menu handle (right
     # edge), Guided Tour; the tour then flies itself forever. Repeatable 1% low benchmark (user, 2026-10-25).
@@ -58,13 +68,14 @@ GAMES = {
 }
 apk = sys.argv[1]; secs = sys.argv[2] if len(sys.argv) > 2 else "30"
 steps = GAMES[sys.argv[3] if len(sys.argv) > 3 else "jetpack"]
-subprocess.run(["bash", os.path.join(D, "swapapk.sh"), apk], check=True)
+if apk != "-":
+    subprocess.run(["bash", os.path.join(D, "swapapk.sh"), apk], check=True)
 if "FC_ENV" in os.environ:
     lines = "\\n".join(os.environ["FC_ENV"].split())
-    subprocess.run(["adb", "shell", f"run-as org.un1box.android sh -c 'printf \"{lines}\\\\n\" > files/debug-env'"], check=True)
+    subprocess.run(["adb", "shell", f"run-as {PKG} sh -c 'printf \"{lines}\\\\n\" > files/debug-env'"], check=True)
 if os.environ.get("FC_FRAMES"):  # read by the engine at start; kept beside any other debug-env lines
-    line = "LT_FRAME_LOG=/data/user/0/org.un1box.android/files/frames.log"
-    subprocess.run(["adb", "shell", f"run-as org.un1box.android sh -c 'grep -q LT_FRAME_LOG files/debug-env 2>/dev/null || echo {line} >> files/debug-env'"], check=True)
+    line = "LT_FRAME_LOG=/data/user/0/org.lighttouch.android/files/frames.log"
+    subprocess.run(["adb", "shell", f"run-as {PKG} sh -c 'grep -q LT_FRAME_LOG files/debug-env 2>/dev/null || echo {line} >> files/debug-env'"], check=True)
 subprocess.run([sys.executable, os.path.join(D, "inappfps.py"), "--boot-only"], check=True)
 # One Power tap wakes the guest to the lock screen, which re-sleeps within ~5 s, so poll for it and
 # swipe at once; tapping Power again before the wake shows (slow on the Poco) puts it back to sleep.
@@ -95,7 +106,14 @@ for _ in range(4):
     print("page swipe dropped, again", flush=True)
 flyer = None
 for n, step in enumerate(steps):
-    if step == "fly":  # hold 0.25 s, let go 0.5 s (back-to-back holds flew into the ceiling), until killed
+    if step == "gc":  # Game Center's sign-in sheet, if it comes within 30 s: its yellow Sign In button, then Cancel
+        t = time.monotonic()
+        while time.monotonic() - t < 30:
+            rect = guest_rect(); r, g, b = avg(rect, .4, .76, .6, .79)
+            if r > 140 and g > 160 and b < 120:
+                sh("input", "swipe", *gpt(rect, .104, .046), *gpt(rect, .104, .046), "150"); time.sleep(3); break
+            time.sleep(1)
+    elif step == "fly":  # hold 0.25 s, let go 0.5 s (back-to-back holds flew into the ceiling), until killed
         rect = guest_rect(); x, y = gpt(rect, .7, .5)
         flyer = subprocess.run(["adb", "shell", f"sh -c 'while true; do input swipe {x} {y} {x} {y} 250; sleep 0.5; done' "
                                 "> /dev/null 2>&1 & echo $!"], capture_output=True, text=True, check=True).stdout.strip()

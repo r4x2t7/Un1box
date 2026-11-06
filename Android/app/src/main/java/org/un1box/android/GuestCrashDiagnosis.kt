@@ -53,7 +53,8 @@ internal object GuestCrashDiagnosis {
             ?.let { return "The emulator's log shows the app called ${it.groupValues[1]} (id ${it.groupValues[2]}), a " +
                 "graphics function Un1box doesn't support yet, and got 0 back. If the app crashed right after, " +
                 "that is the likely cause." }
-        engine.asReversed().firstNotNullOfOrNull { Regex("""REFUSED (\S+)""").find(it) }
+        // draw-error is the app's own GL error, reported back to it as on hardware; common and rarely fatal.
+        engine.asReversed().firstNotNullOfOrNull { Regex("""REFUSED (?!draw-error)(\S+)""").find(it) }
             ?.let { return "The emulator's log shows it refused ${it.groupValues[1]}, which may have caused the crash." }
         return null
     }

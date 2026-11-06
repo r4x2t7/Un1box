@@ -3,7 +3,7 @@
 # usage: ANDROID_SERIAL=... [SP_CALLGRAPH=fp|dwarf] [SP_FREQ=1000] gameprof.sh OUTDIR [seconds]
 set -euo pipefail
 OUT=${1:?usage: gameprof.sh OUTDIR [seconds]}; SECS=${2:-15}
-mkdir -p "$OUT"; PKG=org.un1box.android
+mkdir -p "$OUT"; PKG=org.lighttouch.android
 pid=$(adb shell pidof "$PKG:engine" | tr -d '\r')
 [[ "$pid" =~ ^[0-9]+$ ]] || { echo "Expected one running engine worker; got '$pid'" >&2; exit 1; }
 options=(-p "$pid" -m 8 --cpu-percent 25 -f "${SP_FREQ:-4000}" --duration "$SECS")

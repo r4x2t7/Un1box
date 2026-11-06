@@ -2,7 +2,7 @@
 """In-app boot A/B: for each APK, install, start the selected device, time to lock
 screen, then Stop and wait for 'stopped'. usage: appab.py label=apk ..."""
 import re, subprocess, sys, time, struct
-PKG = "org.un1box.android"
+PKG = "org.lighttouch.android"
 def sh(*a): return subprocess.run(["adb", "shell", *a], capture_output=True, text=True).stdout
 def ui():
     sh("uiautomator", "dump", "/sdcard/ui.xml")

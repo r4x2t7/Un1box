@@ -11,7 +11,7 @@ usage: uirate.py [--swipes N] [--x X] [--top Y] [--bottom Y]
 A screen that scrolls at 120 shows ui fps ~120 on a 120 Hz panel; ~60 means the app was held to
 60 Hz, ~30 that it missed every other refresh."""
 import argparse, re, statistics, subprocess, time
-PKG = "org.un1box.android"
+PKG = "org.lighttouch.android"
 def sh(*a): return subprocess.run(["adb", "shell", *a], capture_output=True, text=True).stdout
 
 def panel_rate():

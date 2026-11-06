@@ -4,7 +4,7 @@ Headless benchmarks for the qemu-ios engine on desktop Linux and on Android
 phones over adb. Measurements behind the 2026-10-16 `dev/perf` changes.
 
 - `ltbench.py` boots a standalone `qemu-system-arm` (n72ap-7E18) locally or on a
-  phone (`adb shell run-as org.un1box.android`, using the installed app's
+  phone (`adb shell run-as org.lighttouch.android`, using the installed app's
   prepared base). QMP over stdio; screendumps detect the lock screen.
   Workloads: `idle` (per-thread CPU and context switches at the home screen),
   `apps` (open/close latency), `scroll` with `--fling` (frames/s from the

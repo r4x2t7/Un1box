@@ -158,7 +158,7 @@ def main():
     if args.pull:
         args.pull.mkdir(parents=True,exist_ok=True)
         with tempfile.TemporaryFile() as archive:
-            subprocess.run(["adb","exec-out","run-as","org.un1box.android","tar","-cf","-","-C","files","profiles"],
+            subprocess.run(["adb","exec-out","run-as","org.lighttouch.android","tar","-cf","-","-C","files","profiles"],
                            stdout=archive,check=True)
             archive.seek(0)
             with tarfile.open(fileobj=archive) as bundle:

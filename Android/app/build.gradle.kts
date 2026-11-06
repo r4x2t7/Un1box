@@ -12,7 +12,8 @@ android {
     buildToolsVersion = "35.0.0"
     ndkVersion = "28.2.13676358"
     defaultConfig {
-        applicationId = "org.un1box.android"
+        // -PappIdSuffix=.name installs a test build beside the regular app (its own data); -PappLabel names it.
+        applicationId = "org.un1box.android" + providers.gradleProperty("appIdSuffix").orElse("").get()
         minSdk = 29
         targetSdk = 35
         versionCode = 13
@@ -27,6 +28,7 @@ android {
     buildTypes { getByName("debug") { isDebuggable = providers.gradleProperty("debuggable").orElse("true").get().toBoolean() } }
     // -Pprofileable=true lets simpleperf attach from adb shell to a non-debuggable build (perf runs only).
     defaultConfig { manifestPlaceholders["profileable"] = providers.gradleProperty("profileable").orElse("false").get() }
+    defaultConfig { manifestPlaceholders["appLabel"] = providers.gradleProperty("appLabel").orElse("Un1box").get() }
     buildFeatures { compose = true; aidl = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }

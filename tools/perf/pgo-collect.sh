@@ -13,7 +13,7 @@ set -eu
 APK=$1; OUT=$2; shift 2
 NDK_BIN=${NDK_BIN:-$(ls -d "$HOME"/Android/Sdk/ndk/*/toolchains/llvm/prebuilt/linux-x86_64/bin | tail -1)}
 HERE=$(cd "$(dirname "$0")" && pwd)
-PKG=org.un1box.android
+PKG=org.lighttouch.android
 DIR=/data/user/0/$PKG/files
 TMP=$OUT.d
 mkdir -p "$TMP"

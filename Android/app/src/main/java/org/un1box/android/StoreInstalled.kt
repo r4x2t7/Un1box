@@ -199,5 +199,6 @@ internal fun ColumnScope.InstalledPlainPage(model: StoreModel, app: InstalledApp
         }, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.bodySmall,
             color = if (lookup == null && installed.lookupError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         if (lookup == null && installed.lookupError != null) TextButton(onClick = { installed.lookUp() }) { Text("Try again") }
+        RemoveApp(model, app.bundleId, app.title, model.queuedBundle(app.bundleId)?.active != true)
     }
 }
