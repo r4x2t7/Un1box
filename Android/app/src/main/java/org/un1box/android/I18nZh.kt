@@ -16,7 +16,7 @@ package org.un1box.android
  * stops matching. tests/i18n/run.py checks that.
  */
 internal object I18nZh {
-    private val exact: Map<String, String> = HashMap<String, String>(1414).apply {
+    private val exact: Map<String, String> = HashMap<String, String>(1424).apply {
         put("No", "否")
         put("OK", "好")
         put(" ms", " 毫秒")
@@ -192,6 +192,7 @@ internal object I18nZh {
         put("Recording…", "正在录制…")
         put("Screenshot", "截屏")
         put("Show fewer", "收起")
+        put("find guest", "查找客户机")
         put("iOS system", "iOS 系统")
         put("warming up", "正在预热")
         put("Bottom left", "左下")
@@ -213,6 +214,7 @@ internal object I18nZh {
         put("Why it quit", "退出原因")
         put("Your device", "你的设备")
         put("back camera", "后置相机")
+        put("connect afc", "连接 AFC")
         put("Add a device", "添加设备")
         put("All licenses", "全部许可证")
         put("Bottom right", "右下")
@@ -284,6 +286,7 @@ internal object I18nZh {
         put("Shutting down…", "正在关机…")
         put("about a minute", "约一分钟")
         put("code signature", "代码签名")
+        put("submit install", "提交安装")
         put("And prepares it", "并在本机准备好")
         put("Cancel download", "取消下载")
         put("Choose a device", "选择设备")
@@ -344,6 +347,7 @@ internal object I18nZh {
         put("Update guest tools", "更新客户机工具")
         put("Waiting to install", "等待安装")
         put("Worker unavailable", "工作进程不可用")
+        put("lockdown handshake", "lockdown 握手")
         put("timing unavailable", "计时不可用")
         put("  of which GL calls", "  其中 GL 调用")
         put("Adding guest tools…", "正在添加客户机工具…")
@@ -357,6 +361,7 @@ internal object I18nZh {
         put("Un1box downloads it", "由 Un1box 下载")
         put("detailed timing off", "详细计时已关闭")
         put("iOS firmware (IPSW)", "iOS 固件（IPSW）")
+        put("list installed apps", "列出已安装应用")
         put("vCPU on a host core", "vCPU 在某个宿主核心上")
         put("waiting for frames…", "正在等待帧…")
         put("(iOS logged nothing)", "（iOS 没有记录任何内容）")
@@ -740,6 +745,8 @@ internal object I18nZh {
         Regex("^Installing (.+) · (\\d+) of (\\d+)\$") to "正在安装 \$1 · 第 \$2 个，共 \$3 个",
         Regex("^Downloading (.+) of (.+)\$") to "正在下载 \$1，共 \$2",
         Regex("^Released (.+) · build (.+)\$") to "发布于 \$1 · 构建 \$2",
+        Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\. Try again after iOS finishes starting\\.\$") to "\$1 失败（设备错误 \$2）。请等 iOS 完成启动后再试。",
+        Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\.\$") to "\$1 失败（设备错误 \$2）。",
         Regex("^(.+) is truncated\$") to "\$1 已被截断",
         Regex("^(.+) is not a guest package\$") to "\$1 不是客户机软件包",
         Regex("^(.+) exceeds the guest package limit\$") to "\$1 超出客户机软件包上限",
