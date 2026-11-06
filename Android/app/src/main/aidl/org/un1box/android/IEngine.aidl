@@ -48,6 +48,8 @@ interface IEngine {
     void setPresentScale(int mode);
     void setPresentVisible(boolean visible);
     void setDetailedTiming(boolean enabled);
+    /** End the worker now, without waiting for iOS to shut down (the Stop deadline's disposal, early). */
+    void forceStop();
     Bundle hitchSnapshot();
     /** The iOS app in front: bundleId and appName, both "" when the guest tools cannot say (a paused guest). */
     Bundle frontmostApp();

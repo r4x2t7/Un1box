@@ -83,6 +83,11 @@ final class N72Board: Board {
     }
 
     func check(_ c: Recipe.Context) throws {
+        // Cydia's first boot installs Substrate, whose launchd hook (cynject from /etc/launchd.conf) then hangs
+        // launchctl on every later boot of this machine (docs/TODO.md): no jailbreak on the 2G until that is solved.
+        if c.recipe.options["jailbreak"] == true {
+            throw FirmwareError(.unsupported, "no jailbreak on the iPod touch 2G yet: Cydia's Substrate hook hangs launchd on every boot after the first")
+        }
         let fm = FileManager.default
         helper = c.o.helper
         bootrom = c.o.bootrom.flatMap { fm.fileExists(atPath: $0.path) ? $0 : nil } ?? Self.bootromPath(helper: helper)

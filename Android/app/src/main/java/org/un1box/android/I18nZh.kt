@@ -16,7 +16,7 @@ package org.un1box.android
  * stops matching. tests/i18n/run.py checks that.
  */
 internal object I18nZh {
-    private val exact: Map<String, String> = HashMap<String, String>(1424).apply {
+    private val exact: Map<String, String> = HashMap<String, String>(1442).apply {
         put("No", "否")
         put("OK", "好")
         put(" ms", " 毫秒")
@@ -154,6 +154,7 @@ internal object I18nZh {
         put("Downloads", "下载")
         put("Guest CPU", "客户机 CPU")
         put("Installed", "已安装")
+        put("Jailbreak", "越狱")
         put("Local IPA", "本地 IPA")
         put("Lock hold", "持锁")
         put("Lock wait", "锁等待")
@@ -178,6 +179,7 @@ internal object I18nZh {
         put("Camera off", "摄像头已关闭")
         put("Cancelling", "正在取消")
         put("Categories", "分类")
+        put("Force stop", "强制停止")
         put("Frame rate", "帧率")
         put("Frame time", "帧时间")
         put("GPU driver", "GPU 驱动")
@@ -226,6 +228,7 @@ internal object I18nZh {
         put("Guest paused", "客户机已暂停")
         put("Hide details", "隐藏详情")
         put("In the queue", "队列中")
+        put("Keep waiting", "继续等待")
         put("Legacy Store", "经典商店")
         put("Start it now", "立即启动")
         put("Tested, slow", "已验证，较慢")
@@ -473,6 +476,7 @@ internal object I18nZh {
         put("Device library unavailable: ", "设备库不可用：")
         put("Download no longer available", "下载链接已失效")
         put("Experimental cache selection", "实验性缓存选择")
+        put("Needs iPhone OS 2.0 or later", "需要 iPhone OS 2.0 或更高版本")
         put("Prepare from an IPSW instead", "改为从 IPSW 准备")
         put("Start the device to install.", "启动设备后才能安装。")
         put("Un1box finds the files in it", "Un1box 会在其中自动查找文件")
@@ -582,6 +586,7 @@ internal object I18nZh {
         put("No version of this app runs on this device.", "该应用没有可在此设备上运行的版本。")
         put("Start the device to read its crash reports.", "启动设备后才能读取其崩溃报告。")
         put("The catalog supplied an unexpected address.", "目录提供了意外的地址。")
+        put("Cydia and afc2, installed during preparation", "准备过程中安装 Cydia 与 afc2")
         put("Debug diagnosis is unavailable in this build", "此版本不提供调试诊断")
         put("The catalog response exceeds the size limit.", "目录响应超出大小限制。")
         put("The guest stopped. Start it to install apps.", "客户机已停止，启动后才能安装应用。")
@@ -684,6 +689,7 @@ internal object I18nZh {
         put("Cancel preparation and wait for a terminal result before closing the worker", "先取消准备并等待最终结果，再关闭工作进程")
         put("Guest start request was lost; select Start or Recover retained state again.", "启动请求丢失了；请再次点「开始」或「恢复保留的状态」。")
         put("Without the boot file this device will not start; you can still add it now.", "没有启动文件，此设备无法启动；现在仍可添加。")
+        put("Not on iPod touch 2G yet: it wouldn't start up again after its first restart", "iPod touch 2G 暂不支持：它第一次重启后就再也起不来了")
         put("64 KB, part of the chip rather than the IPSW. The same for every iOS version.", "64 KB，属于芯片而非 IPSW，各 iOS 版本都相同。")
         put("The emulator stopped. The device's data is kept; press Start to run it again.", "模拟器已停止。设备数据已保留，点「开始」可再次运行。")
         put("Un1box needs Apple's stock IPSW for this version, and the device's boot file.", "此版本需要 Apple 原版 IPSW，以及设备的启动文件。")
@@ -710,8 +716,10 @@ internal object I18nZh {
         put("Detailed timing: off (turn it on in Settings > Diagnostics for per-frame GL, CPU and lock timing)", "详细计时：关（在 设置 > 诊断 中开启，才能看到逐帧的 GL、CPU 与锁耗时）")
         put("Downloads come from Apple's servers when ipsw.me lists them, otherwise from the Internet Archive.", "ipsw.me 有记录时从 Apple 服务器下载，否则从 Internet Archive 下载。")
         put("The Legacy Store doesn't have this app, so there is no page for it and no newer version to offer.", "经典商店没有这个应用，因此没有对应页面，也没有可提供的新版本。")
+        put("Force stopped before iOS finished shutting down. The next start checks the device's storage first.", "已在 iOS 关机完成前强制停止。下次启动时会先检查设备存储。")
         put("Hand-picked by the archive. Whether a version runs on this device is checked when you open an app.", "由归档精选。某个版本能否在此设备运行，会在打开应用时检查。")
         put("Microphone off: Un1box has no microphone permission. Turn the switch off and on again to grant it.", "麦克风已关闭：Un1box 没有麦克风权限。把开关关掉再打开即可授权。")
+        put("no jailbreak on the iPod touch 2G yet: Cydia's Substrate hook hangs launchd on every boot after the first", "iPod touch 2G 暂不支持越狱：Cydia 的 Substrate 钩子会让它在第一次之后的每次启动都卡住")
         put("iOS shuts down like holding the power button: apps close and the device turns off. Your apps and data are kept.", "iOS 会像长按电源键那样关机：应用关闭、设备断电，应用与数据都会保留。")
         put("iOS closed the app because it took too long to start. The emulator was too slow; the app itself is probably fine.", "iOS 因应用启动耗时过长而将其关闭。模拟器速度太慢，应用本身大概率没有问题。")
         put("Could not reach Legacy Store. Check your connection, and that Un1box is allowed network access in Android's app settings.", "无法连接经典商店。请检查网络，并确认 Android 应用设置中允许 Un1box 联网。")
@@ -724,6 +732,7 @@ internal object I18nZh {
         put("For a device prepared elsewhere, such as on a computer: its iOS system (.itbase) and, for the iPod touch 1G and 2G and the original iPhone, its boot file.", "用于在别处（例如电脑上）准备好的设备：它的 iOS 系统（.itbase），以及 iPod touch 1G/2G 和初代 iPhone 需要的启动文件。")
         put("Skips large emulator-code cleanups after app changes. Uses more RAM and may slightly lower steady-state game speed; applies after restarting the emulated iPhone.", "应用切换后跳过大规模的模拟器代码清理。更占内存，稳态游戏速度可能略降；重启模拟设备后生效。")
         put("Turn on Detailed frame timing in Settings › Diagnostics to see where each frame's time went: guest CPU, GL and lock waits. It costs a few percent of speed while on.", "在设置 › 诊断中开启「详细帧计时」，即可看到每帧时间去向：客户机 CPU、GL 与锁等待。开启时会损失几个百分点的速度。")
+        put("iOS hasn't finished shutting down. Force stop ends it now, like pulling the battery: anything it hadn't saved is lost, and the next start checks the device's storage first.", "iOS 还没有关机完成。强制停止会立刻结束它，相当于直接拔电池：没来得及保存的内容会丢失，下次启动时会先检查设备存储。")
         put("The frame copy into the guest's surface runs on a worker thread. Off copies it on the CPU instead, which can be steadier when the guest is waiting most of its frame anyway. Applies at the next guest start.", "把帧复制到客户机表面由工作线程完成。关闭则改在 CPU 上复制，当客户机本来大半帧都在等待时可能更稳。下次启动客户机时生效。")
         put("The emulator's log shows glMapBuffer had no device memory to hand back: the app created the buffer with a NULL data pointer, so the emulator returned 0. That is a gap in Un1box's graphics support, not an app-version mismatch.", "模拟器日志显示 glMapBuffer 没有设备内存可分配：应用创建缓冲区时传了 NULL 数据指针，模拟器因此返回 0。这是 Un1box 图形支持上的缺口，不是应用版本不匹配。")
         put("This phone's microphone becomes the device's input, for Voice Memos, Shazam and anything else that records; iOS asks inside the device the first time an app records. Android asks for the microphone permission when you turn this on. Applies the next time the device starts", "把本机麦克风作为设备的输入，供语音备忘录、Shazam 等录音应用使用；应用首次录音时 iOS 会在设备内询问。打开此选项时 Android 会请求麦克风权限。下次启动设备时生效")
@@ -747,6 +756,7 @@ internal object I18nZh {
         Regex("^Released (.+) · build (.+)\$") to "发布于 \$1 · 构建 \$2",
         Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\. Try again after iOS finishes starting\\.\$") to "\$1 失败（设备错误 \$2）。请等 iOS 完成启动后再试。",
         Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\.\$") to "\$1 失败（设备错误 \$2）。",
+        Regex("^Force stop (.+)\\?\$") to "强制停止 \$1？",
         Regex("^(.+) is truncated\$") to "\$1 已被截断",
         Regex("^(.+) is not a guest package\$") to "\$1 不是客户机软件包",
         Regex("^(.+) exceeds the guest package limit\$") to "\$1 超出客户机软件包上限",
