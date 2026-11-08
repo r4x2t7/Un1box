@@ -9,6 +9,7 @@
  *   liblt_appservice.so info    --socket <mux.sock>
  *   liblt_appservice.so install --socket <mux.sock> --ipa <path> --bundle-id <id>
  *   liblt_appservice.so list    --socket <mux.sock>
+ *   liblt_appservice.so push    --socket <mux.sock> --src <file> --dst <absolute guest path>
  *   liblt_appservice.so syslog  --socket <mux.sock> --seconds <1..600>
  *
  * Output is JSON Lines on stdout (one object per line, flushed):
@@ -16,6 +17,7 @@
  *   {"phase":"upload","percent":N}                              install
  *   {"phase":"mutation","status":"..."}                         just before instproxy_install
  *   {"phase":"install","status":"...","percent":N|null}         install callbacks
+ *   {"result":{"path":"...","bytes":N,"service":"com.apple.afc2"}}  push
  *   {"result":{...}}                                            success, exit 0
  *   {"error":"..."}                                             failure, exit 1 (2: install watchdog)
  *
@@ -589,6 +591,111 @@ static int action_list(struct session *s)
 	return 0;
 }
 
+/* ---------- push ---------- */
+
+/* Every parent of an absolute guest path, made in turn: /Library/MobileSubstrate/DynamicLibraries for a dylib.
+ * Failures are left to the file open, which reports the one that matters. */
+static void make_parents(afc_client_t afc, const char *path)
+{
+	char buffer[PATH_MAX];
+	snprintf(buffer, sizeof(buffer), "%s", path);
+	for (char *p = buffer + 1; *p; p++) {
+		if (*p != '/')
+			continue;
+		*p = '\0';
+		afc_make_directory(afc, buffer);
+		*p = '/';
+	}
+}
+
+/* Write one local file to an absolute guest path. afc2 is the whole filesystem as root, which a jailbreak
+ * brings with Cydia; the sandboxed afc service reaches /var/mobile/Media only and answers on any device, so
+ * it is tried second and its error is what gets reported when neither works. */
+static int action_push(struct session *s, const char *src, const char *dst)
+{
+	int fd = open(src, O_RDONLY | O_CLOEXEC);
+	struct stat st;
+	if (fd < 0 || fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0) {
+		emit_error("The file cannot be read: %s", fd < 0 ? strerror(errno) : "not a non-empty regular file");
+		if (fd >= 0)
+			close(fd);
+		return 1;
+	}
+	if (dst[0] != '/') {
+		emit_error("The guest path must be absolute.");
+		close(fd);
+		return 1;
+	}
+
+	const char *names[] = {"com.apple.afc2", AFC_SERVICE_NAME};
+	const char *used = NULL;
+	afc_client_t afc = NULL;
+	afc_error_t last = AFC_E_UNKNOWN_ERROR;
+	for (size_t i = 0; i < sizeof(names) / sizeof(names[0]) && !afc; i++) {
+		lockdownd_service_descriptor_t service = start_service(s, names[i]);
+		if (!service)
+			continue;
+		last = afc_client_new(s->device, service, &afc);
+		lockdownd_service_descriptor_free(service);
+		if (last == AFC_E_SUCCESS)
+			used = names[i];
+		else
+			afc = NULL;
+	}
+	if (!afc) {
+		emit_error("The guest has no writable file service (device error %d). Jailbreak the device first: afc2 comes with Cydia.", (int)last);
+		close(fd);
+		return 1;
+	}
+
+	make_parents(afc, dst);
+	uint64_t handle = 0;
+	afc_error_t err = afc_file_open(afc, dst, AFC_FOPEN_WRONLY, &handle);
+	if (err != AFC_E_SUCCESS) {
+		emit_error("open %s failed (device error %d). The root filesystem is writable only after a jailbreak.", dst, (int)err);
+		afc_client_free(afc);
+		close(fd);
+		return 1;
+	}
+	char *buffer = malloc(1 << 16);
+	uint64_t total = 0;
+	int rc = 0;
+	ssize_t got = 0;
+	while (buffer && (got = read(fd, buffer, 1 << 16)) > 0) {
+		uint32_t written = 0;
+		err = afc_file_write(afc, handle, buffer, (uint32_t)got, &written);
+		if (err != AFC_E_SUCCESS || (ssize_t)written != got) {
+			emit_error("write %s failed (device error %d).", dst, (int)err);
+			rc = 1;
+			break;
+		}
+		total += (uint64_t)written;
+	}
+	if (!rc && (got < 0 || !buffer)) {
+		emit_error("read %s failed: %s", src, buffer ? strerror(errno) : "out of memory");
+		rc = 1;
+	}
+	afc_file_close(afc, handle);
+	afc_client_free(afc);
+	free(buffer);
+	close(fd);
+	if (rc)
+		return rc;
+
+	struct buf b = {0};
+	buf_puts(&b, "{\"result\":{\"path\":");
+	json_string(&b, dst);
+	buf_puts(&b, ",\"bytes\":");
+	char number[32];
+	snprintf(number, sizeof(number), "%" PRIu64, total);
+	buf_puts(&b, number);
+	buf_puts(&b, ",\"service\":");
+	json_string(&b, used);
+	buf_puts(&b, "}}");
+	emit(&b);
+	return 0;
+}
+
 /* ---------- install ---------- */
 
 static uint16_t le16(const unsigned char *p) { return (uint16_t)(p[0] | p[1] << 8); }
@@ -1043,7 +1150,7 @@ static void parent_death_guard(void)
 
 static void usage_error(const char *detail)
 {
-	emit_error("%s Usage: info|list|crashlog --socket PATH, install --socket PATH --ipa PATH --bundle-id ID, or syslog --socket PATH --seconds 1..600", detail);
+	emit_error("%s Usage: info|list|crashlog --socket PATH, install --socket PATH --ipa PATH --bundle-id ID, push --socket PATH --src PATH --dst PATH, or syslog --socket PATH --seconds 1..600", detail);
 }
 
 int main(int argc, char **argv)
@@ -1057,6 +1164,7 @@ int main(int argc, char **argv)
 	}
 	const char *action = argv[1];
 	const char *socket_path = NULL, *ipa = NULL, *bundle_id = NULL, *seconds_text = NULL;
+	const char *src_path = NULL, *dst_path = NULL;
 	int verbose = 0;
 	for (int i = 2; i < argc; i++) {
 		const char **slot = NULL;
@@ -1068,6 +1176,10 @@ int main(int argc, char **argv)
 			slot = &bundle_id;
 		else if (strcmp(argv[i], "--seconds") == 0)
 			slot = &seconds_text;
+		else if (strcmp(argv[i], "--src") == 0)
+			slot = &src_path;
+		else if (strcmp(argv[i], "--dst") == 0)
+			slot = &dst_path;
 		else if (strcmp(argv[i], "--verbose") == 0) {
 			verbose = 1;
 			continue;
@@ -1083,7 +1195,8 @@ int main(int argc, char **argv)
 	}
 	int is_install = strcmp(action, "install") == 0;
 	int is_syslog = strcmp(action, "syslog") == 0;
-	if (!is_install && !is_syslog && strcmp(action, "info") != 0 && strcmp(action, "list") != 0 && strcmp(action, "crashlog") != 0) {
+	int is_push = strcmp(action, "push") == 0;
+	if (!is_install && !is_push && !is_syslog && strcmp(action, "info") != 0 && strcmp(action, "list") != 0 && strcmp(action, "crashlog") != 0) {
 		usage_error("Unknown action.");
 		return 1;
 	}
@@ -1101,6 +1214,14 @@ int main(int argc, char **argv)
 	}
 	if (!is_install && (ipa || bundle_id)) {
 		usage_error("--ipa/--bundle-id apply to install only.");
+		return 1;
+	}
+	if (is_push && (!src_path || !*src_path || !dst_path || !*dst_path)) {
+		emit_error("push needs --src and --dst.");
+		return 1;
+	}
+	if (!is_push && (src_path || dst_path)) {
+		usage_error("--src/--dst apply to push only.");
 		return 1;
 	}
 	unsigned seconds = 0;
@@ -1138,6 +1259,8 @@ int main(int argc, char **argv)
 	if (emit_target(&s) == 0) {
 		if (is_install) {
 			rc = action_install(&s, ipa, bundle_id);
+		} else if (is_push) {
+			rc = action_push(&s, src_path, dst_path);
 		} else if (strcmp(action, "list") == 0) {
 			rc = action_list(&s);
 		} else if (strcmp(action, "crashlog") == 0) {

@@ -108,19 +108,44 @@ def extract(archive, directory, destination):
     return tree
 
 
+def default_ndk():
+    """The NDK the Android tooling resolves to here: the SDK's ndk/ dir, the AppData SDK, or the local share SDK."""
+    candidates = [Path.home() / 'Android/Sdk/ndk/28.2.13676358',
+                  Path.home() / 'AppData/Local/Android/Sdk/ndk/28.2.13676358',
+                  Path.home() / '.local/share/android-sdk/ndk/28.2.13676358']
+    for candidate in candidates:
+        if (candidate / 'source.properties').exists():
+            return candidate
+    return candidates[0]
+
+
+HOST_TAGS = ('windows-x86_64', 'linux-x86_64', 'darwin-x86_64')
+
+
+def host_toolchain(ndk):
+    """The prebuilt LLVM dir for this host, whatever platform the NDK was unpacked for."""
+    root = ndk / 'toolchains/llvm/prebuilt'
+    for tag in HOST_TAGS:
+        if (root / tag / 'bin').is_dir():
+            return root / tag
+    raise RuntimeError('NDK has no prebuilt LLVM for this host under ' + str(root))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('output', type=Path)
-    parser.add_argument('--ndk', type=Path, default=Path.home() / 'Android/Sdk/ndk/28.2.13676358')
+    parser.add_argument('--ndk', type=Path, default=default_ndk())
     parser.add_argument('--source-cache', type=Path, action='append')
     parser.add_argument('--jobs', type=int, default=max(1, min(8, os.cpu_count() or 1)))
     args = parser.parse_args()
     output = args.output.resolve()
     ndk = args.ndk.resolve()
     caches = args.source_cache if args.source_cache is not None else [DEFAULT_CACHE]
-    toolchain = ndk / 'toolchains/llvm/prebuilt/linux-x86_64'
+    toolchain = host_toolchain(ndk)
     tools = toolchain / 'bin'
-    cc = tools / '{}{}-clang'.format(TRIPLE, API)
+    cc = tools / ('{}{}-clang{}'.format(TRIPLE, API, '.cmd' if os.name == 'nt' else ''))
+    if not cc.exists():
+        cc = tools / '{}{}-clang'.format(TRIPLE, API)
     if not cc.exists():
         raise RuntimeError('NDK clang not found: ' + str(cc))
     ndk_revision = next(line.split('=', 1)[1].strip() for line in (ndk / 'source.properties').read_text().splitlines()

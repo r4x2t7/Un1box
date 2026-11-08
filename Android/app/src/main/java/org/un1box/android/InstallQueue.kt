@@ -193,7 +193,10 @@ class InstallQueue<P>(private val work: QueueWork<P>,
                 entry.cancelled -> { discard = file; entries.remove(entry) }
                 file != null -> { entry.file = file; entry.item = entry.item.copy(state = QueueState.READY, phase = "Waiting to install", progress = null,
                     overall = maxOf(entry.item.overall, QueueStages.COPY)) }
-                else -> entry.item = entry.item.copy(state = QueueState.FAILED, phase = "", progress = null, error = failure)
+                else -> {
+                    DevMode.log("store") { "fetch failed: $failure" }
+                    entry.item = entry.item.copy(state = QueueState.FAILED, phase = "", progress = null, error = failure)
+                }
             }
         }
         discard?.let(work::discard)
@@ -210,7 +213,7 @@ class InstallQueue<P>(private val work: QueueWork<P>,
             installing = false
             if (entry.cancelled && !entry.item.committed) entries.remove(entry)
             else entry.item = if (failure == null) entry.item.copy(state = QueueState.DONE, phase = "Installed. Find it on the Home screen.", progress = 1f, overall = 1f)
-            else entry.item.copy(state = QueueState.FAILED, phase = "", progress = null, error = failure)
+            else { DevMode.log("store") { "install failed: $failure" }; entry.item.copy(state = QueueState.FAILED, phase = "", progress = null, error = failure) }
         }
         changed()
     }

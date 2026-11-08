@@ -34,7 +34,10 @@ android {
     kotlinOptions { jvmTarget = "17" }
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     // Guest app-services executables and firmwarekit run from nativeLibraryDir, which holds files only when extracted.
-    packaging { jniLibs { useLegacyPackaging = providers.gradleProperty("mobileServicesArm64").isPresent || providers.gradleProperty("firmwareKitDir").isPresent } }
+    // Legacy extraction keeps the native libs on disk: libfirmwarekit.so and the
+    // one-shot helper are *executed* (PrepareScreen → FirmwareService), and
+    // canExecute() is false while they only live inside the APK.
+    packaging { jniLibs { useLegacyPackaging = true } }
 }
 dependencies {
     implementation("androidx.activity:activity-compose:1.10.1")
@@ -112,6 +115,9 @@ providers.gradleProperty("firmwareKitDir").orNull?.let { input ->
     val stage = tasks.register<Copy>("prepareFirmwareKit") {
         from(kit) { include("firmwarekit"); rename { "libfirmwarekit.so" } }
         from(kit) { include("lighttouch-oneshot"); rename { "liblighttouch_oneshot.so" } }
+        // Runtime dependencies of firmwarekit (curl/OpenSSL/nghttp2/nghttp3/ssh2),
+        // resolved through its DT_RUNPATH $ORIGIN from nativeLibraryDir on device.
+        from(kit.resolve("libs")) { include("*.so") }
         into(firmwareKitJniLibs.map { it.dir("arm64-v8a") })
     }
     val notices = tasks.register<Copy>("prepareFirmwareKitNotices") {
@@ -261,3 +267,22 @@ val prepareFrontendNotices = tasks.register<Exec>("prepareFrontendNotices") {
 }
 android.sourceSets["main"].assets.srcDir(frontendNoticeAssets)
 tasks.named("preBuild").configure { dependsOn(prepareFrontendNotices) }
+
+// aidl writes the command line into each generated file's header (" * Using: ..."). On Windows that
+// header carries C:/Users/... and javac treats \uXXXX as an escape even inside a comment, so the
+// build stops at "illegal unicode escape" before it compiles anything. The header only records how
+// the file was produced; replacing its backslashes keeps the file and says the same thing.
+tasks.withType<JavaCompile>().configureEach {
+    doFirst {
+        val root = layout.buildDirectory.dir("generated/aidl_source_output_dir").get().asFile
+        if (!root.isDirectory) return@doFirst
+        root.walkTopDown().filter { it.extension == "java" }.forEach { file ->
+            val lines = file.readLines().toMutableList()
+            var changed = false
+            for (i in lines.indices) if (lines[i].startsWith(" * Using:") && lines[i].contains('\\')) {
+                lines[i] = lines[i].replace('\\', '/'); changed = true
+            }
+            if (changed) file.writeText(lines.joinToString("\n") + "\n")
+        }
+    }
+}

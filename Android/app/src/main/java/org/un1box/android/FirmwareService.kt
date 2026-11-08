@@ -76,6 +76,8 @@ class FirmwareService : Service() {
         val cache = File(cacheDir, "firmwarekit")
         val out = File(destination)
         try {
+            CaBundle.ensure(this)
+            JailbreakAssets.seed(this, cache)
             val catalog = File(filesDir, "firmware-catalog.json")
             assets.open("firmware-catalog.json").use { input -> catalog.outputStream().use { input.copyTo(it) } }
             run(libs, listOf("create", "--catalog", catalog.path, "--id", firmwareId, "--ipsw", ipsw, "--out", out.path,
@@ -92,9 +94,11 @@ class FirmwareService : Service() {
             done = total
             state = "complete"
             note("complete")
+            DevMode.log("prepare") { "prepare complete; destination=${out.path}" }
             foreground("Your device is prepared. Open Un1box to add it.")
         } catch (e: Exception) {
             if (cancelling) state = "cancelled" else { failure = e.message ?: "Firmware preparation failed"; state = "failed" }
+            DevMode.log("prepare") { "prepare failed: cancelling=$cancelling error=$failure\n${e.stackTraceToString()}" }
             writable(out); out.deleteRecursively()
             if (cancelling) PreparationNote.clear(this) else note("failed")
         } finally {
@@ -110,12 +114,16 @@ class FirmwareService : Service() {
      * progress: the step's fraction and what it is doing; error), turned into this worker's stage and a weighted done/total.
      */
     private fun run(libs: File, args: List<String>) {
+        DevMode.log("prepare") { "firmwarekit ${args.joinToString(" ")}" }
+        CaBundle.ensure(this)
         val builder = ProcessBuilder(listOf(File(libs, "libfirmwarekit.so").path) + args)
             .redirectError(File(cacheDir, "firmwarekit.log").apply { parentFile?.mkdirs() })
         builder.environment().apply {
             put("LTM_QEMU_DYLIB", File(libs, "libqemu-arm.so").path)
             put("LD_LIBRARY_PATH", libs.path)
             put("HOME", filesDir.path); put("TMPDIR", cacheDir.path)
+            // The ARM translation layer runs the one-shot boots several times slower than a Mac.
+            put("FWK_ONESHOT_TIMEOUT", "5400")
         }
         check(!cancelling) { "Cancelled" }
         val child = builder.start().also { process = it }
