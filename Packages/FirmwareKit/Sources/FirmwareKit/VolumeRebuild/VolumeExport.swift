@@ -72,7 +72,7 @@ public enum VolumeExport {
     public static func manifest(_ out: URL) -> URL { out.appendingPathComponent("export.json") }
 
     /// Steps 1-4: images in a fresh `out` directory, ready to attach or keep.
-    nonisolated(nonsending) public static func export(
+    nonisolated public static func export(
         _ src: Source,
         volumes: Set<String>? = nil,
         out: URL,
@@ -179,7 +179,7 @@ public enum VolumeExport {
 
     /// Export, then attach every image read-only where Finder shows it. With `root`, the device's one tree there
     /// instead, out of Finder's sidebar (nobrowse): system at `root`, data on its private/var, as the device mounts them.
-    nonisolated(nonsending) public static func mount(
+    nonisolated public static func mount(
         _ src: Source,
         volumes: Set<String>? = nil,
         out: URL,
@@ -220,7 +220,7 @@ public enum VolumeExport {
     }
 
     /// Detaches what `out`'s export.json says is attached, last mounted first (data off system's tree), then deletes `out`.
-    nonisolated(nonsending) public static func unmount(out: URL) async throws {
+    nonisolated public static func unmount(out: URL) async throws {
         let vols = try readManifest(out)
         let paths = Set(vols.map { URL(fileURLWithPath: $0.image).resolvingSymlinksInPath().path })
         // Query the current device node: a manifest's old /dev/diskN may have been reused.
@@ -255,7 +255,7 @@ public enum VolumeExport {
 
     /// Used only for staging directories created by this operation. On failed
     /// eject or image discovery, retain the artifact rather than unlink a live disk.
-    nonisolated(nonsending) static func removeDetachedOutput(_ out: URL) async throws {
+    nonisolated static func removeDetachedOutput(_ out: URL) async throws {
         let root = out.resolvingSymlinksInPath().path + "/"
         guard
             try await DiskImage.checkedAttachedImages().allSatisfy({
@@ -274,7 +274,7 @@ public enum VolumeExport {
     }
 
     /// fsck_hfs -fn passes on the image.
-    nonisolated(nonsending) static func fsckClean(_ image: URL) async throws -> Bool {
+    nonisolated static func fsckClean(_ image: URL) async throws -> Bool {
         let dev = try await VolumeMount.attach(image)
         let status: Int32
         do { status = try await VolumeMount.exec("/sbin/fsck_hfs", ["-fn", dev]).0 } catch {

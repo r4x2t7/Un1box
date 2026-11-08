@@ -6,7 +6,7 @@ extension StoppedVolumeEdit {
     /// jailbroken preparation makes (SystemEdits.installJailbreak from `bootstrap`, Cydia.bootstrap's), in one stopped
     /// edit, so the device keeps its apps and data. The new generation's lock says `jailbroken` (DeviceLock.jailbroken),
     /// and on the K48 family its boot files carry the jailbroken boot-args (K48Board.jailbreakBootFiles).
-    nonisolated(nonsending) public static func jailbreak(
+    nonisolated public static func jailbreak(
         device: URL,
         bootstrap: URL,
         policy: StorageRecordPolicy = .standalone,

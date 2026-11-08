@@ -216,12 +216,18 @@ extension SystemEdits {
         )
         var root: [String] = [Cydia.noStash, Cydia.metadata]
         var mobile: [String] = []
-        for rel in entries where added.contains(rel) || link(rel) {
+        // toybox tar can fail to create a link that already exists on the volume
+        // (see tar()'s non-fatal link errors). Only paths actually on the volume
+        // can be handed to HFSPlusVolume.setOwner.
+        let present: (String) -> Bool = { rel in exists(rel) || link(rel) }
+        for rel in entries where (added.contains(rel) || link(rel)) && present(rel) {
             if rel.hasPrefix("private/var/mobile/") { mobile.append(rel) } else { root.append(rel) }
         }
         if !hadPrefs, !mobile.contains(Cydia.springBoardPrefs) { mobile.append(Cydia.springBoardPrefs) }
         // Under /private/var the data volume's copy keeps its own modes (only /private/var/local, a setgid folder).
-        let modes = special.filter { added.contains($0.path) && !$0.path.hasPrefix("private/var/") }
+        let modes = special.filter {
+            added.contains($0.path) && !$0.path.hasPrefix("private/var/") && present($0.path)
+        }
         return (
             "Cydia: \(bootstrap.lastPathComponent), \(added.count) of \(entries.count) entries added", root, mobile,
             modes
@@ -229,8 +235,19 @@ extension SystemEdits {
     }
 
     /// A tar listing's member name as a volume path: no leading ./, no trailing /.
+    /// Android's toybox tar prints links as "./usr/bin/chsh -> chpass" and
+    /// "./bin/gunzip link to ./bin/uncompress" in -tf output; GNU tar prints
+    /// just the member name. Strip those suffixes or the arrow text ends up in
+    /// the owner list and fails catalog lookup ("not in the catalog: ... -> ...").
     static func entryPath(_ name: Substring) -> String {
-        String(name.hasPrefix("./") ? name.dropFirst(2) : name).trimmingCharacters(in: ["/"])
+        var text = String(name.hasPrefix("./") ? name.dropFirst(2) : name)
+        for marker in [" -> ", " link to "] {
+            if let r = text.range(of: marker) {
+                text = String(text[..<r.lowerBound])
+                break
+            }
+        }
+        return text.trimmingCharacters(in: ["/"])
     }
 
     /// A `tar -tv` line of a regular file with the set-user-ID or set-group-ID bit: its path and full permission
@@ -249,10 +266,15 @@ extension SystemEdits {
         return (entryPath(fields[8]), mode)
     }
 
-    /// /usr/bin/tar `args`; its stdout, or an error with its stderr.
+    /// /usr/bin/tar `args`; its stdout, or an error with its stderr. Android has no /usr/bin; toybox tar
+    /// (/system/bin/tar, a symlink) reads and extracts the same archives (its -tv owner/group column is one
+    /// "user/group" field, so specialMode's set-user-ID scan just finds none — Cydia's cydo keeps the archive's
+    /// own modes as the extract lays them down).
     private static func tar(_ args: [String]) throws -> String {
+        let tar = ["/usr/bin/tar", "/system/bin/tar", "/system/xbin/tar", "/data/d/tar"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) } ?? "/usr/bin/tar"
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+        p.executableURL = URL(fileURLWithPath: tar)
         p.arguments = args
         let out = Pipe()
         let err = Pipe()
@@ -262,8 +284,27 @@ extension SystemEdits {
         let data = out.fileHandleForReading.readDataToEndOfFile()
         let errors = err.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
+        let message = String(decoding: errors, as: UTF8.self)
+        // Android's toybox tar fails the whole extraction when the bootstrap's
+        // symlinks and hard links (/etc, /var, /tmp, bin/uncompress, ...) already
+        // exist on the firmware volume: -k keeps those firmware-owned entries,
+        // which is exactly what we want, but toybox reports "can't link ...:
+        // File exists"/"Permission denied" and exits non-zero. GNU tar on macOS
+        // replaces them silently. Ignore only these non-fatal link errors; a real
+        // extraction failure still throws, and installCydia checks Cydia.app/Cydia.
+        if args.first == "-xkf", p.terminationStatus != 0 {
+            let lines = message.split(separator: "\n").map(String.init)
+                .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            let linkOnly: (String) -> Bool = { line in
+                line.contains("can't link") || line.hasSuffix("File exists") ||
+                line.hasSuffix("Permission denied") || line.contains("had errors")
+            }
+            if !lines.isEmpty && lines.allSatisfy(linkOnly) {
+                return String(decoding: data, as: UTF8.self)
+            }
+        }
         guard p.terminationStatus == 0 else {
-            throw FirmwareError(.internal, "tar \(args.first ?? ""): \(String(decoding: errors, as: UTF8.self))")
+            throw FirmwareError(.internal, "tar \(args.first ?? ""): \(message)")
         }
         return String(decoding: data, as: UTF8.self)
     }

@@ -576,7 +576,7 @@ public enum K48NAND {
     }
 
     /// A bare case-sensitive journaled HFS+ volume (like iOS's data partition) in a sparse raw file.
-    nonisolated(nonsending) public static func makeHFSImage(at url: URL, size: Int64) async throws {
+    nonisolated public static func makeHFSImage(at url: URL, size: Int64) async throws {
         try await VolumeMount.makeHFS(url, size: size)
     }
 
@@ -595,7 +595,7 @@ public enum K48NAND {
 
     /// ipad1_nand.py build: the store for `system` (+ `s3` + the data volume) at the MBR's partitions, into `out`.
     @discardableResult
-    nonisolated(nonsending) public static func build(
+    nonisolated public static func build(
         geometry geo: Geometry = .k48With16GB,
         mbr: URL,
         kernelVersion: [UInt8],
@@ -701,7 +701,7 @@ public enum K48NAND {
     /// with the MBR, the third partition and the signature (epoch, flags, kernel version, whitening) that `store`
     /// plus `overlay` hold now. Whatever YaFTL state the guest left goes; the device restores its map on boot as it
     /// does from a prepared store. `work` keeps the MBR and third partition read back.
-    nonisolated(nonsending) static func rebuild(
+    nonisolated static func rebuild(
         store: URL,
         overlay: URL?,
         system: URL,

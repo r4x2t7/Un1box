@@ -38,7 +38,7 @@ public enum StoppedVolumeEdit {
     }
     private static var fm: FileManager { .default }
 
-    nonisolated(nonsending) public static func begin(
+    nonisolated public static func begin(
         device: URL,
         policy: StorageRecordPolicy = .standalone,
         log: (String) -> Void = { _ in }
@@ -175,7 +175,7 @@ public enum StoppedVolumeEdit {
     /// guest boot for the entire Finder mount. Closing Finder is not commit.
     /// `mountPoint`: the folder the volume is mounted on, out of Finder's sidebar (nobrowse); the edit's own
     /// "File System" folder when nil.
-    nonisolated(nonsending) public static func mount(
+    nonisolated public static func mount(
         device: URL,
         id: UUID,
         policy: StorageRecordPolicy = .standalone,
@@ -213,7 +213,7 @@ public enum StoppedVolumeEdit {
 
     /// `amend`: after the volumes' metadata is settled and before the store is built, with the system volume's image
     /// and the generation's (writable) base; the members it returns go into the generation's lock. YaFTL and N72 only.
-    nonisolated(nonsending) public static func commit(
+    nonisolated public static func commit(
         device: URL,
         id: UUID,
         policy: StorageRecordPolicy = .standalone,
@@ -344,7 +344,7 @@ public enum StoppedVolumeEdit {
     /// 1.x: the edited volume's changed pages over the physical pages the FTL maps them to (in the generation's
     /// overlay clone), the journal left for the device to initialize (a host-written header says 512-byte blocks,
     /// which 1.x adopts and then fails its 2048-byte I/O with), then publish.
-    nonisolated(nonsending) private static func commitLegacy(edit: StorageGeneration, image: URL, log: (String) -> Void)
+    nonisolated private static func commitLegacy(edit: StorageGeneration, image: URL, log: (String) -> Void)
         async throws
     {
         try HFSPlusVolume(image, writable: true).leaveJournalToDevice()
@@ -389,7 +389,7 @@ public enum StoppedVolumeEdit {
         log("published storage generation \(edit.id.uuidString)")
     }
 
-    nonisolated(nonsending) public static func discard(device: URL, id: UUID, policy: StorageRecordPolicy = .standalone)
+    nonisolated public static func discard(device: URL, id: UUID, policy: StorageRecordPolicy = .standalone)
         async throws
     {
         try await StorageGeneration.withOwner(try StorageGeneration.resume(device: device, id: id, policy: policy)) {
@@ -398,7 +398,7 @@ public enum StoppedVolumeEdit {
             try await edit.discard()
         }
     }
-    nonisolated(nonsending) public static func recover(device: URL, id: UUID, policy: StorageRecordPolicy = .standalone)
+    nonisolated public static func recover(device: URL, id: UUID, policy: StorageRecordPolicy = .standalone)
         async throws
     {
         try await StorageGeneration.withOwner(try StorageGeneration.resume(device: device, id: id, policy: policy)) {
@@ -419,7 +419,7 @@ public enum StoppedVolumeEdit {
         }
         return session
     }
-    nonisolated(nonsending) private static func eject(_ edit: StorageGeneration) async throws {
+    nonisolated private static func eject(_ edit: StorageGeneration) async throws {
         let prefix = edit.root.resolvingSymlinksInPath().path + "/"
         // the data volume first: it is mounted on the system volume
         let attachedImages = try await DiskImage.checkedAttachedImages()
@@ -436,7 +436,7 @@ public enum StoppedVolumeEdit {
             throw FirmwareError(.internal, "edit volume is still busy; close its files and retry")
         }
     }
-    nonisolated(nonsending) private static func preserveMetadata(
+    nonisolated private static func preserveMetadata(
         edit: StorageGeneration,
         image: URL,
         original: URL,

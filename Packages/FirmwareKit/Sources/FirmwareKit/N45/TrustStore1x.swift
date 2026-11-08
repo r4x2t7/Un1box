@@ -126,7 +126,7 @@ public enum TrustStore1x {
 
     /// Makes `certificate` an anchor in a stopped 1.x device's system volume, through a stopped edit (begin, mount,
     /// the row, commit: the 1.x FTL is written in place). False when the device already trusts it.
-    nonisolated(nonsending) public static func trust(
+    nonisolated public static func trust(
         device: URL,
         certificate: Data,
         policy: StorageRecordPolicy = .standalone,

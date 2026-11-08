@@ -19,7 +19,6 @@ import Foundation
 #if canImport(Android)
 import Android
 #endif
-import Subprocess
 #if canImport(System)
 import System
 #else
@@ -283,22 +282,41 @@ public enum DiskImage {
         return out
     }
 
-    /// (status, stdout then stderr), stdin closed. Suspends while the actual
-    /// library owns and reaps the child; cancellation/spawn failure stay errors.
+    /// (status, stdout then stderr), stdin closed. Foundation Process instead of
+    /// swift-subprocess: that release pins swift-tools 6.2 while the Command Line
+    /// Tools here are 6.1, and this single call is all FirmwareKit needs. Pipes
+    /// are drained concurrently so big tool output cannot deadlock on 64 KiB
+    /// pipe buffers; cancellation/spawn failure stay errors.
     static func exec(_ argv: [String]) async throws -> (Int32, String) {
-        let result = try await Subprocess.run(
-            .path(FilePath(argv[0])),
-            arguments: Arguments(Array(argv.dropFirst())),
-            input: .none,
-            output: .string(limit: 1 << 24),
-            error: .string(limit: 1 << 24)
-        )
         try Task.checkCancellation()
-        let status: Int32 =
-            switch result.terminationStatus {
-            case .exited(let code): code
-            case .signaled(let signal): -signal
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: argv[0])
+        proc.arguments = Array(argv.dropFirst())
+        proc.standardInput = FileHandle.nullDevice
+        let out = Pipe()
+        let err = Pipe()
+        proc.standardOutput = out
+        proc.standardError = err
+        let status: Int32 = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Int32, Error>) in
+            proc.terminationHandler = { p in
+                cont.resume(returning: p.terminationReason == .uncaughtSignal
+                    ? -p.terminationStatus
+                    : p.terminationStatus)
             }
-        return (status, result.standardOutput + result.standardError)
+            do {
+                try proc.run()
+            } catch {
+                cont.resume(throwing: error)
+            }
+        }
+        func drain(_ pipe: Pipe) async -> Data {
+            await withCheckedContinuation { (cont: CheckedContinuation<Data, Never>) in
+                DispatchQueue.global().async {
+                    cont.resume(returning: pipe.fileHandleForReading.readDataToEndOfFile())
+                }
+            }
+        }
+        let data = (await drain(out)) + (await drain(err))
+        return (status, String(decoding: data, as: UTF8.self))
     }
 }

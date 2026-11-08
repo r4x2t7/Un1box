@@ -30,7 +30,7 @@ public nonisolated enum FirmwareBootAdmission {
         }
     }
 
-    nonisolated(nonsending) public static func admit(
+    nonisolated public static func admit(
         device: URL,
         policy: StorageRecordPolicy = .standalone,
         allowRaw: Bool = false
@@ -115,7 +115,7 @@ public nonisolated enum FirmwareBootAdmission {
         return true
     }
 
-    nonisolated(nonsending) static func admit(
+    nonisolated static func admit(
         device: URL,
         policy: StorageRecordPolicy = .standalone,
         allowRaw: Bool = false,

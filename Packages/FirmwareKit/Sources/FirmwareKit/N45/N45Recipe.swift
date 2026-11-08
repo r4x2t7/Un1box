@@ -268,7 +268,7 @@ final class N45Board: Board {
         ]
     }
 
-    nonisolated(nonsending) func volumes(_ c: Recipe.Context) async throws {
+    nonisolated func volumes(_ c: Recipe.Context) async throws {
         let volume = c.work.appendingPathComponent("volume.img")
         self.volume = volume
         try await UDIF.extractRootfs(dmg: c.decFile("rootfs.dmg"), to: volume)
@@ -448,7 +448,7 @@ final class N45Board: Board {
         return (report, record, [SystemEdits.springBoardJob] + seeded)
     }
 
-    nonisolated(nonsending) func store(_ c: Recipe.Context) async throws {
+    nonisolated func store(_ c: Recipe.Context) async throws {
         let volume = try self.volume.filled("the system volume")
         let fil = try N45NAND.filID(iBoot: Data(contentsOf: c.file("iBoot.bin")))
         let (written, meta) = try N45NAND.write(volume: volume, out: c.nand, filID: fil, banks: banks, bbtMap: iPhone)

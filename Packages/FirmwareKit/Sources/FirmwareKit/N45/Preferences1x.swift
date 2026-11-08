@@ -18,7 +18,7 @@ public enum Preferences1x {
 
     /// Applies `changes`, each ["domain", "key", "value"] (no value: the key removed), through a stopped edit. False
     /// when the device's overlay already holds the keys they set.
-    nonisolated(nonsending) public static func write(
+    nonisolated public static func write(
         device: URL,
         changes: [[String: Any]],
         policy: StorageRecordPolicy = .standalone,

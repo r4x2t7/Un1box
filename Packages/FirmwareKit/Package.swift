@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // FirmwareKit: IPSW -> emulated device preparation.
 // Swift owns device preparation. Tests use frozen reference hashes and
 // optional corpus inputs; strict acceptance fails when selected prerequisites are absent. Each module lives in its own
@@ -32,7 +32,6 @@ let package = Package(
         // development after 0.9.20: its Android and Windows imports (weichsel/ZIPFoundation#380)
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", revision: "e7a17d57c583067eaa6659cd6d9521265b7664e9"),
         .package(url: "https://github.com/p-x9/MachOKit.git", exact: "0.53.0"),
-        .package(url: "https://github.com/swiftlang/swift-subprocess.git", exact: "1.0.0"),
         .package(url: "https://github.com/mtgto/Unrar.swift.git", exact: "0.5.4"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", exact: "1.8.2"),
         .package(url: "https://github.com/apple/swift-crypto.git", exact: "3.15.1"),
@@ -44,7 +43,8 @@ let package = Package(
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: nonApple)),
-            ]
+            ],
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .target(name: "CActivation", cSettings: [.define("LT_ACTIVATION_LIBRARY")]),
         // Linux and Android: AES-CBC through the libcrypto Foundation links already, and the fast cores (CHostFast.h).
@@ -57,7 +57,6 @@ let package = Package(
                 .product(name: "ZIPFoundation", package: "ZIPFoundation"),
                 // MachOKit builds on Apple platforms and Linux, not Android; MachOHeaders stands in off the Mac.
                 .product(name: "MachOKit", package: "MachOKit", condition: .when(platforms: [.macOS])),
-                .product(name: "Subprocess", package: "swift-subprocess"),
                 .product(name: "Unrar", package: "Unrar.swift"),
                 .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: nonApple)),
                 .product(name: "_CryptoExtras", package: "swift-crypto", condition: .when(platforms: nonApple)),

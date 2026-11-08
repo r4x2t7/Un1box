@@ -203,7 +203,7 @@ public enum SystemEdits {
     /// for the real-iBoot chain (ipad1_rootfs.build --kernelcache). kboot omits it (the kernel is in the bundle).
     public static let kernelcachePath = "System/Library/Caches/com.apple.kernelcaches/kernelcache"
 
-    nonisolated(nonsending) public static func buildK48(
+    nonisolated public static func buildK48(
         rootfs: URL,
         work: URL,
         systemBytes: Int,

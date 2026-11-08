@@ -354,7 +354,7 @@ public enum PreparedBase {
     /// the Mac's enabled ones) into the n72 base's system volume, which keeps /private/var, as create does: the volume
     /// rebuilt from the store, edited, and laid out again as a fresh store (N72NAND.write), the lock's NAND record and
     /// derived language with it.
-    nonisolated(nonsending) public static func seedLanguage(_ base: URL, tag: String?, keyboards: [String]?)
+    nonisolated public static func seedLanguage(_ base: URL, tag: String?, keyboards: [String]?)
         async throws
     {
         let fm = FileManager.default

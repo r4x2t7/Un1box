@@ -40,10 +40,10 @@ protocol Board: AnyObject {
     func inspect(_ c: Recipe.Context) throws
     func identity(seed: String) throws -> UnitIdentity
     func bootFiles(_ c: Recipe.Context) throws
-    nonisolated(nonsending) func volumes(_ c: Recipe.Context) async throws
+    nonisolated func volumes(_ c: Recipe.Context) async throws
     /// Writes nand/ from the volumes (the volumes are deleted after).
-    nonisolated(nonsending) func store(_ c: Recipe.Context) async throws
-    nonisolated(nonsending) func keybag(_ c: Recipe.Context) async throws
+    nonisolated func store(_ c: Recipe.Context) async throws
+    nonisolated func keybag(_ c: Recipe.Context) async throws
     func seal(_ c: Recipe.Context) throws
     /// The board's lock keys, merged (dictionaries recursively) onto the shared ones.
     func lock(_ c: Recipe.Context) throws -> [String: Any]
@@ -51,7 +51,7 @@ protocol Board: AnyObject {
 
 extension Board {
     func inspect(_ c: Recipe.Context) throws {}
-    nonisolated(nonsending) func keybag(_ c: Recipe.Context) async throws {}
+    nonisolated func keybag(_ c: Recipe.Context) async throws {}
     func seal(_ c: Recipe.Context) throws {}
 }
 
@@ -98,7 +98,7 @@ public enum Recipe {
         func warn(_ s: String) { log("warning: " + s) }
     }
 
-    nonisolated(nonsending) static func create(
+    nonisolated static func create(
         _ o: Preparer.Options,
         board: Board,
         emit: @escaping @Sendable (PrepareEvent) -> Void
@@ -298,7 +298,7 @@ public enum Recipe {
     /// The ramdisk the keybag one-shot boots: the build's own Update (else Restore) ramdisk out of the decrypt cache,
     /// or, for a build without ramdisk keys (recipe.keybag_ramdisk_from), the sibling entry's, decrypted into work.
     /// Returns (its URL, the lock's name for it).
-    nonisolated(nonsending) static func keybagRamdisk(_ c: Context) async throws -> (URL, String) {
+    nonisolated static func keybagRamdisk(_ c: Context) async throws -> (URL, String) {
         // A restore-only build ships just the Restore ramdisk; a build whose Update ramdisk has no public key (the 5.0
         // betas, 9A334) boots its keyed Restore ramdisk: it runs the same restored_external.
         let comp = try BuildComponents.load(c.ipsw, board: c.e.board)

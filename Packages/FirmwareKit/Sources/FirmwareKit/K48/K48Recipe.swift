@@ -72,7 +72,14 @@ final class K48Board: Board {
     /// 300 s, longer under host load. it_seal also waits out the first boot's data migration (up to 600 s past its
     /// settle): 6.1.6's took about 2 min on a Ryzen 7 3700X under TCG, so every release gets 900 s off the Mac's speed.
     var oneshotTimeout: Double = 900
-    static func oneshotTimeout(productVersion: String) -> Double { 900 }
+    /// Slow hosts (the Android emulator's ARM translation layer) run the one-shot boots several times slower
+    /// than a Mac: FWK_ONESHOT_TIMEOUT, as seconds, lifts the cap without a rebuild.
+    static func oneshotTimeout(productVersion: String) -> Double {
+        if let s = ProcessInfo.processInfo.environment["FWK_ONESHOT_TIMEOUT"], let t = Double(s), t >= 60 {
+            return t
+        }
+        return 900
+    }
 
     /// A jailbroken device's kernel leaves code signatures to AMFI alone (amfi_get_out_of_my_way), as the
     /// jailbreaks' kernel patches did: with AMFI asking amfid about every ad hoc signed library, Substrate's launcher,
@@ -262,7 +269,7 @@ final class K48Board: Board {
     /// The store geometry: the part's default, or the recipe's nand_vendor_type variant (iOS 3.0: one VFL bank per CE).
     var geometry: K48NAND.Geometry { recipe.nandVendorType == 0x10001 ? .k48With16GBV1 : .k48With16GB }
 
-    nonisolated(nonsending) func volumes(_ c: Recipe.Context) async throws {
+    nonisolated func volumes(_ c: Recipe.Context) async throws {
         let mbr = c.work.appendingPathComponent("mbr.bin")
         self.mbr = mbr
         // At least what a restore gives this unit (MinimumSystemPartition + padding). The catalog's 1280 MiB left an
@@ -319,7 +326,7 @@ final class K48Board: Board {
         c.engine = vols.engine
     }
 
-    nonisolated(nonsending) func store(_ c: Recipe.Context) async throws {
+    nonisolated func store(_ c: Recipe.Context) async throws {
         let mbr = try self.mbr.filled("the MBR")
         let vols = try self.vols.filled("the volumes")
         var epoch = try K48NAND.signatureEpoch(kernelcache: c.decFile("kernelcache.mach"))
@@ -355,7 +362,7 @@ final class K48Board: Board {
     /// 4.x data protection: effaceable + system keybag from the IPSW's own Update ramdisk (ipad1_keybag): the
     /// ramdisk with it_keybag as restored_external, booted once as md0 on the store + NOR. One attempt: a panic fails
     /// the preparation, which starts over (a new device has nothing to keep).
-    nonisolated(nonsending) func keybag(_ c: Recipe.Context) async throws {
+    nonisolated func keybag(_ c: Recipe.Context) async throws {
         let fm = FileManager.default
         // keybag runs only with dataProtection, which ships a NOR on either chain
         let nor = try norURL(c).filled("the NOR")

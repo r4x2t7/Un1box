@@ -115,7 +115,7 @@ public actor StorageGeneration {
         lease = nil
     }
 
-    nonisolated(nonsending) static func withOwner<T>(
+    nonisolated static func withOwner<T>(
         _ transaction: StorageGeneration,
         body: (StorageGeneration) async throws -> T
     ) async throws -> T {
@@ -142,7 +142,7 @@ public actor StorageGeneration {
         self.lease = nil
     }
 
-    nonisolated(nonsending) static func withOwner<T>(
+    nonisolated static func withOwner<T>(
         _ transaction: StorageGeneration,
         retaining owner: StoppedRecordOwner,
         body: (StorageGeneration) async throws -> T

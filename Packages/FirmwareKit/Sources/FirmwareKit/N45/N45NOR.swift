@@ -178,12 +178,16 @@ struct AESCore {
             s = s.map { Self.sbox[Int($0)] }
             s = (0..<16).map { s[($0 + 4 * ($0 % 4)) % 16] }  // ShiftRows over column-major state
             if r != rounds {
-                s = stride(from: 0, to: 16, by: 4).flatMap { c -> [UInt8] in
-                    let a = Array(s[c..<c + 4])
-                    return (0..<4).map { i in
-                        Self.mul(a[i], 2) ^ Self.mul(a[(i + 1) % 4], 3) ^ a[(i + 2) % 4] ^ a[(i + 3) % 4]
+                var mixed: [UInt8] = []
+                for c in stride(from: 0, to: 16, by: 4) {
+                    let a: [UInt8] = Array(s[c..<c + 4])
+                    for i in 0..<4 {
+                        mixed.append(
+                            Self.mul(a[i], 2) ^ Self.mul(a[(i + 1) % 4], 3) ^ a[(i + 2) % 4] ^ a[(i + 3) % 4]
+                        )
                     }
                 }
+                s = mixed
             }
             s = zip(s, keys[r]).map { $0 ^ $1 }
         }

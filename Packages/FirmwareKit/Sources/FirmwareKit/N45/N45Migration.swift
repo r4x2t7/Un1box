@@ -17,7 +17,7 @@ public nonisolated enum N45Migration {
     static let stamp = ".n45-sc-prefs-2"
 
     /// Runs the step on a stopped 1.x device that needs it. True when it edited. The caller holds no lease.
-    nonisolated(nonsending) public static func systemConfiguration(
+    nonisolated public static func systemConfiguration(
         device: URL,
         policy: StorageRecordPolicy = .standalone,
         allowRaw: Bool = false,

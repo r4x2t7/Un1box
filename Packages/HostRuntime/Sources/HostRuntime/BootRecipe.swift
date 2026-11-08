@@ -284,19 +284,20 @@ public nonisolated enum BootRecipe {
             + ",nand=\(escape(d.nand))" + (d.overlay.isEmpty ? "" : ",nand-overlay=\(escape(d.overlay))")
             + (d.usbAddress.map { ",usb-tcp-addr=\($0)" } ?? "") + (d.wifi ? "" : ",wifi=off")
             + (d.guestPackage.map { ",guest-package=\(escape($0))" } ?? "") + options(d.machineOptions)
-        let argv =
-            [
-                "LightTouchMac", "-M", machine, "-drive", "if=pflash,format=raw,file=\(escape(d.writableNOR))",
-                "-display", "none", "-no-shutdown",
-            ] + audio + ["-serial", serial] + (netdev.map { ["-netdev", $0] } ?? [])
-            // The iPhone's modem carries its EDGE data (raw IP over a mux DLCI) to its own slirp, cell0, with the web
-            // proxy's guestfwd as Wi-Fi's (the image routes cellular through the proxy too) and its lan= setting; with
-            // no wifi0 given, off the LAN like the machine's own default wifi0.
-            + (hardware.hasCellular
-                ? [
-                    "-netdev",
-                    netdev.map { $0.replacingOccurrences(of: "id=wifi0", with: "id=cell0") } ?? "user,id=cell0,lan=off",
-                ] : [])
+        var argv: [String] = [
+            "LightTouchMac", "-M", machine, "-drive", "if=pflash,format=raw,file=\(escape(d.writableNOR))",
+            "-display", "none", "-no-shutdown",
+        ]
+        argv += audio + ["-serial", serial] + (netdev.map { ["-netdev", $0] } ?? [])
+        // The iPhone's modem carries its EDGE data (raw IP over a mux DLCI) to its own slirp, cell0, with the web
+        // proxy's guestfwd as Wi-Fi's (the image routes cellular through the proxy too) and its lan= setting; with
+        // no wifi0 given, off the LAN like the machine's own default wifi0.
+        if hardware.hasCellular {
+            argv += [
+                "-netdev",
+                netdev.map { $0.replacingOccurrences(of: "id=wifi0", with: "id=cell0") } ?? "user,id=cell0,lan=off",
+            ]
+        }
         return BootConfig(argv: argv, machine: hardware.machine)
     }
 
@@ -341,12 +342,13 @@ public nonisolated enum BootRecipe {
                 + d.cellular.globals : []
         // usb-kbd on the always-on EHCI becomes the active keyboard for key_mac. 20 mA: 4.x gives the
         // dock's host side AAPL,power-supply 50 and refuses the default 100 mA device ("not enough power").
-        let argv =
-            ["LightTouchMac", "-M", machine, "-display", "none"]
-            + (d.oneShot ? ["-monitor", "none", "-no-reboot"] : ["-no-shutdown"])
-            + audio + ["-serial", serial]
-            + (hardware.hasUSBHost && !d.oneShot ? ["-device", "usb-kbd,bus=usb-bus.0,max-power=20"] : [])
-            + (netdev.map { ["-netdev", $0] } ?? []) + cellular + restore
+        var argv: [String] = ["LightTouchMac", "-M", machine, "-display", "none"]
+        argv += d.oneShot ? ["-monitor", "none", "-no-reboot"] : ["-no-shutdown"]
+        argv += audio + ["-serial", serial]
+        if hardware.hasUSBHost && !d.oneShot {
+            argv += ["-device", "usb-kbd,bus=usb-bus.0,max-power=20"]
+        }
+        argv += (netdev.map { ["-netdev", $0] } ?? []) + cellular + restore
         return BootConfig(argv: argv, machine: board)
     }
 

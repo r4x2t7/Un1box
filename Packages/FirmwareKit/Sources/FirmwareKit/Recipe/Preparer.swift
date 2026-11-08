@@ -337,7 +337,7 @@ public enum Preparer {
 
     /// ipad1_keybag.ramdisk_with_helper: a private copy of the restore ramdisk, 1 MiB larger, with `helper` as
     /// root's restored_external (mode 755), which the ramdisk's rc.boot runs first.
-    nonisolated(nonsending) static func ramdiskWithHelper(_ src: URL, helper: URL, work: URL) async throws -> URL {
+    nonisolated static func ramdiskWithHelper(_ src: URL, helper: URL, work: URL) async throws -> URL {
         let fm = FileManager.default
         let rd = work.appendingPathComponent("keybag-ramdisk.dmg")
         try fm.copyItem(at: src, to: rd)

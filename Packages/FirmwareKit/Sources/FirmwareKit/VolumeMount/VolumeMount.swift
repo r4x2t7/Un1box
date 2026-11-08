@@ -27,7 +27,7 @@ public enum VolumeMount {
     /// `fsck_hfs -fn` and detaches (findings that are only folder counts are set offline and rechecked:
     /// `repairingFolderCounts`). A volume that would not unmount is never fsck'd (a mounted volume
     /// reports bogus damage); it is force-detached and the call throws. When `body` throws, its error wins.
-    nonisolated(nonsending) public static func withMounted<T>(
+    nonisolated public static func withMounted<T>(
         _ image: URL,
         at mountPoint: URL,
         _ body: (URL) async throws -> T
@@ -73,7 +73,7 @@ public enum VolumeMount {
     #if !os(macOS)
     /// withMounted where no HFS+ driver is at hand (Linux, Android, Windows): the volume's files are laid out at
     /// `mountPoint` by HFSPlusEditor, `body` edits them there, and what changed is written back into the image.
-    nonisolated(nonsending) static func withExtracted<T>(
+    nonisolated static func withExtracted<T>(
         _ image: URL,
         at mountPoint: URL,
         _ body: (URL) async throws -> T

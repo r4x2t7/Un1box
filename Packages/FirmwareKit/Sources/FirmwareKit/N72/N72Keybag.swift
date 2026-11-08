@@ -24,7 +24,7 @@ enum N72Keybag {
 
     /// `out` holds nand/, nor.bin, iBoot.bin and gid-blobs.bin (writable); `dec` the decrypt cache (the kernelcache);
     /// `ramdisk` the decrypted restore ramdisk to boot (this build's, or a sibling's: Recipe.keybagRamdisk).
-    nonisolated(nonsending) static func run(
+    nonisolated static func run(
         out: URL,
         dec: URL,
         ramdisk: URL,

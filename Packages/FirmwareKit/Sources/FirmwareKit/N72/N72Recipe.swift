@@ -199,7 +199,7 @@ final class N72Board: Board {
     var volume: URL?
 
     /// The system volume: IPSW rootfs grown to the recipe, fstab, kernelcache, the bake; owners and dates patched.
-    nonisolated(nonsending) func volumes(_ c: Recipe.Context) async throws {
+    nonisolated func volumes(_ c: Recipe.Context) async throws {
         let volume = c.work.appendingPathComponent("volume.img")
         self.volume = volume
         try await UDIF.extractRootfs(dmg: c.decFile("rootfs.dmg"), to: volume)
@@ -241,7 +241,7 @@ final class N72Board: Board {
         c.log("\(try hfs.normalize(after: newest, to: newest)) catalog records dated as of the IPSW's newest file")
     }
 
-    nonisolated(nonsending) func store(_ c: Recipe.Context) async throws {
+    nonisolated func store(_ c: Recipe.Context) async throws {
         let volume = try self.volume.filled("the system volume")
         let (written, meta) = try N72NAND.write(volume: volume, blocks: blocks, epoch: epoch, out: c.nand)
         c.log("\(written) filesystem pages, \(meta) metadata pages generated (epoch \(epoch))")
@@ -250,7 +250,7 @@ final class N72Board: Board {
 
     /// 4.x data protection: effaceable + system keybag from the IPSW's own Update ramdisk (a restore-only build such
     /// as 8A293 ships just the Restore one; restored_external runs first on either).
-    nonisolated(nonsending) func keybag(_ c: Recipe.Context) async throws {
+    nonisolated func keybag(_ c: Recipe.Context) async throws {
         let (source, name) = try await Recipe.keybagRamdisk(c)
         try await N72Keybag.run(
             out: c.o.out,

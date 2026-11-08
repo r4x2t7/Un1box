@@ -26,7 +26,7 @@ import HostRuntime
         self.cleanup = cleanup
         self.operation = Task { await operation() }
         signals = [SIGTERM, SIGINT].map { sig in
-            signal(sig, SIG_IGN)
+            _ = signal(sig, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
             source.setEventHandler { [weak self] in
                 Task { @MainActor in self?.cancel(sig == SIGTERM ? "SIGTERM" : "SIGINT") }

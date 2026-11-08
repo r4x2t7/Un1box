@@ -64,34 +64,35 @@ public func copyfile(_ source: String, _ target: String, _ state: OpaquePointer?
 public func clonefile(_ source: String, _ target: String, _ flags: UInt32) -> Int32 {
     var link = stat()
     guard lstat(source, &link) == 0 else { return -1 }
-    if link.st_mode & S_IFMT == S_IFLNK {
+    if UInt32(link.st_mode) & UInt32(S_IFMT) == UInt32(S_IFLNK) {
         guard let to = try? FileManager.default.destinationOfSymbolicLink(atPath: source) else { return -1 }
         return symlink(to, target)
     }
-    if link.st_mode & S_IFMT == S_IFDIR {
+    if UInt32(link.st_mode) & UInt32(S_IFMT) == UInt32(S_IFDIR) {
         // as macOS's: a folder is cloned with everything in it
-        guard mkdir(target, link.st_mode & 0o7777 | 0o700) == 0,
+        guard mkdir(target, mode_t(UInt32(link.st_mode)) & 0o7777 | 0o700) == 0,
             let names = try? FileManager.default.contentsOfDirectory(atPath: source)
         else { return -1 }
         for name in names where clonefile(source + "/" + name, target + "/" + name, flags) != 0 { return -1 }
-        return chmod(target, link.st_mode & 0o7777)
+        return chmod(target, mode_t(UInt32(link.st_mode)) & 0o7777)
     }
     let input = open(source, O_RDONLY)
     guard input >= 0 else { return -1 }
     defer { close(input) }
     var info = stat()
     guard fstat(input, &info) == 0 else { return -1 }
-    let output = open(target, O_WRONLY | O_CREAT | O_EXCL, info.st_mode & 0o7777)
+    let output = open(target, O_WRONLY | O_CREAT | O_EXCL, mode_t(UInt32(info.st_mode)) & 0o7777)
     guard output >= 0 else { return -1 }
     defer { close(output) }
     #if os(Linux) || os(Android)
     let FICLONE: UInt = 0x4004_9409
     if ioctl(output, FICLONE, input) == 0 { return 0 }
     #endif
-    guard ftruncate(output, info.st_size) == 0 else { return -1 }
+    let size = Int64(info.st_size)
+    guard ftruncate(output, off_t(size)) == 0 else { return -1 }
     var buffer = [UInt8](repeating: 0, count: 1 << 20)
     var offset: off_t = 0
-    while offset < info.st_size {
+    while offset < size {
         #if os(Linux) || os(Android)
         let data = lseek(input, offset, 3)  // SEEK_DATA
         if data < 0 { break }  // ENXIO: only a hole remains

@@ -26,8 +26,8 @@ public enum PackedNAND {
         let nand = base.appendingPathComponent("nand")
         var info = stat()
         guard lstat(nand.path, &info) == 0 else { throw Failure.invalidImage }
-        if info.st_mode & S_IFMT == S_IFDIR { return false }
-        guard info.st_mode & S_IFMT == S_IFREG, info.st_nlink == 1,
+        if UInt32(info.st_mode) & UInt32(S_IFMT) == UInt32(S_IFDIR) { return false }
+        guard UInt32(info.st_mode) & UInt32(S_IFMT) == UInt32(S_IFREG), info.st_nlink == 1,
             let lock = try DeviceLock.read(base: base), lock.board == "n72ap",
             let record = lock.other["outputs"]?["nand"], record["path"]?.string == "nand",
             record["format"]?.string == "ITNAND01", record["listing_sha256"] == nil,
