@@ -50,6 +50,12 @@ internal object Native {
     external fun profile(path: String): String
     external fun profileStatus(): Int
     external fun guestRequest(operation: Int, argument: String, timeoutMs: Int): Array<String>
+    /** Writes one file inside the guest as root: path and octal mode, the bytes as the body. */
+    external fun guestPut(path: String, mode: Int, bytes: ByteArray, timeoutMs: Int): Array<String>
+    /** Reads up to [limit] bytes from a guest file as root; poll returns hex-encoded bytes. */
+    external fun guestRead(path: String, offset: Long, limit: Int, timeoutMs: Int): Array<String>
+    /** Runs one command in the guest as root (/bin/sh -c); poll output is merged stdout+stderr. */
+    external fun guestExec(command: String, stdin: ByteArray?, timeoutMs: Int): Array<String>
     external fun guestPoll(requestId: Long): Array<String>
     external fun guestCancel(requestId: Long)
     external fun audio(buffer: ShortArray): Int

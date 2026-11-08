@@ -31,6 +31,12 @@ interface IEngine {
     oneway void motion(int kind, long timestampNanos, in float[] xyz, int rotation);
     String screenshot(String path);
     Bundle guestRequest(int operation, String argument, int timeoutMs);
+    /** Writes one file inside the guest as root (the agent's `put`): path, octal mode, the bytes. */
+    Bundle guestPut(String path, int mode, in byte[] bytes, int timeoutMs);
+    /** Reads up to limit bytes from a guest file as root (the agent's `getrange`); poll output is hex. */
+    Bundle guestRead(String path, long offset, int limit, int timeoutMs);
+    /** Runs one command in the guest as root (the agent's `exec`, /bin/sh -c); poll output is stdout+stderr. */
+    Bundle guestExec(String command, in byte[] stdin, int timeoutMs);
     Bundle guestPoll(long requestId);
     void guestCancel(long requestId);
     String debugEnableTouchTrace();

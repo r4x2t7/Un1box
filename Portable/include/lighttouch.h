@@ -393,13 +393,36 @@ typedef enum {
     LT_GUEST_LAUNCH_BUILTIN = 2,
     LT_GUEST_TYPE_TEXT = 3,
     LT_GUEST_SYNC = 4,
-    LT_GUEST_LAUNCH_GYRO_PROBE = 5
+    LT_GUEST_LAUNCH_GYRO_PROBE = 5,
+    /* Writes one file inside the guest through the agent's own `put`: argument is
+     * "<absolute path> <octal mode>", body/body_length the bytes. The agent runs as
+     * root, so the file lands root-owned with the mode given. No shell is involved;
+     * paths are one line of 1024 bytes at most, bodies 128 KiB (175 KiB base64 on
+     * the wire, inside the agent's 256 KiB request limit). */
+    LT_GUEST_PUT_FILE = 6
 } lt_guest_operation;
 typedef struct {
     uint32_t size, version;
     uint32_t operation, timeout_ms;
     const char *argument;
+    /* LT_GUEST_PUT_FILE only; ignored (and may be null) for every other operation. */
+    const void *body;
+    uint32_t body_length;
+    uint32_t body_reserved;
 } lt_guest_request;
+/* Reads bytes from one guest file through the agent's `getrange`: argument is
+ * "<offset> <limit> <path>", body unused. The reply comes back through the same
+ * poll channel; because file bytes are binary, the result output carries a hex
+ * encoding (bytes = hex length; file bytes = hex length / 2, i.e. how many
+ * bytes were actually read at the offset, capped at the limit asked for).
+ * limit is capped at 2000 so the hex fits the 4096-byte output buffer. */
+#define LT_GUEST_READ_FILE 7
+/* Runs one command inside the guest through the agent's `exec` (/bin/sh -c):
+ * argument is the command (one line, 1024 bytes at most), body/stdin optional.
+ * stdout and stderr come back merged through the poll channel as UTF-8 text
+ * (the exit status rides guest_status; keep output small — the wire reply and
+ * the output buffer are both 4 KiB-scale). */
+#define LT_GUEST_EXEC 8
 typedef struct {
     uint32_t size, version;
     uint64_t request_id;

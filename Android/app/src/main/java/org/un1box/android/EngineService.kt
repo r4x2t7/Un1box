@@ -60,6 +60,11 @@ class EngineService : Service() {
     // Detailed timing keeps an automatic capture running while the guest does; this thread
     // starts one once the guest runs and again after a capture reaches its limit.
     private val detailedTimingThread = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { Thread(it, "detailed-timing") }
+    // Bundled Substrate extensions go in once a guest is up; this thread retries until it succeeds
+    // (a guest that is still booting has no agent yet) and then stops doing anything.
+    private val substrateThread = java.util.concurrent.Executors.newSingleThreadScheduledExecutor { Thread(it, "substrate") }
+    @Volatile private var substrateInstalled = false
+    @Volatile private var substrateError = ""
     private val binder = object : IEngine.Stub() {
         override fun rename(recordId: String, name: String): String = Native.rename(File(filesDir, "library").absolutePath, recordId, name)
         override fun remove(recordId: String): String = Native.remove(File(filesDir, "library").absolutePath, recordId)
@@ -141,7 +146,15 @@ class EngineService : Service() {
         override fun importPrepared(source: String, displayName: String, rom: String): String = Native.importBase(source, File(filesDir, "library").absolutePath, displayName, rom, "")
         override fun adoptPrepared(source: String, displayName: String, rom: String): String = Native.adoptPrepared(source, File(filesDir, "library").absolutePath, displayName, rom)
         override fun setGuestPackage(recordId: String, path: String): String = Native.setGuestPackage(File(filesDir, "library").absolutePath, recordId, path)
-        override fun records(): Array<Bundle> = Native.records(File(filesDir, "library").absolutePath).mapNotNull { row ->
+        override fun records(): Array<Bundle> {
+            BootDiag.log(applicationContext, "records() entered")
+            val result = try { Native.records(File(filesDir, "library").absolutePath) }
+                catch (t: Throwable) {
+                    BootDiag.log(applicationContext, "records() native threw: ${t.javaClass.name}: ${t.message}\n${t.stackTraceToString()}")
+                    throw t
+                }
+            BootDiag.log(applicationContext, "records() returned ${result.size} rows")
+            return result.mapNotNull { row ->
             if (row[0].isEmpty()) { error = row.getOrElse(1) { "Device library unavailable" }; null }
             else Bundle().apply {
                 putString("id", row[0]); putString("name", row[1]); putString("board", row[2]); putString("build", row[3])
@@ -150,6 +163,7 @@ class EngineService : Service() {
                 putString("contacts", row[6]); putBoolean("gyro", row[7] == "1"); putBoolean("acceleration", row[8] == "1")
             }
         }.toTypedArray()
+        }
         override fun select(recordId: String): String = Native.select(File(filesDir, "library").absolutePath, recordId)
         override fun start(recordId: String): Bundle = startRecord(recordId, coldRecovery = false)
         override fun recoverStart(recordId: String): Bundle = startRecord(recordId, coldRecovery = true)
@@ -349,6 +363,18 @@ class EngineService : Service() {
             val result = Native.guestRequest(operation, argument, timeoutMs)
             return Bundle().apply { putLong("requestId", result[0].toLong()); putString("error", result[1]) }
         }
+        override fun guestPut(path: String, mode: Int, bytes: ByteArray, timeoutMs: Int): Bundle {
+            val result = Native.guestPut(path, mode, bytes, timeoutMs)
+            return Bundle().apply { putLong("requestId", result[0].toLong()); putString("error", result[1]) }
+        }
+        override fun guestRead(path: String, offset: Long, limit: Int, timeoutMs: Int): Bundle {
+            val result = Native.guestRead(path, offset, limit, timeoutMs)
+            return Bundle().apply { putLong("requestId", result[0].toLong()); putString("error", result[1]) }
+        }
+        override fun guestExec(command: String, stdin: ByteArray?, timeoutMs: Int): Bundle {
+            val result = Native.guestExec(command, stdin, timeoutMs)
+            return Bundle().apply { putLong("requestId", result[0].toLong()); putString("error", result[1]) }
+        }
         override fun guestPoll(requestId: Long): Bundle {
             val result = Native.guestPoll(requestId)
             return Bundle().apply { putInt("state", result[0].toInt()); putInt("guestStatus", result[1].toInt()); putString("output", result[2]); putString("error", result[3]) }
@@ -471,6 +497,13 @@ class EngineService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
     override fun onCreate() {
         super.onCreate()
+        BootDiag.install(applicationContext, "engine")
+        // The engine runs in its own process; without this the worker-side DevMode calls
+        // (engine, substrate, store) would all be silently dropped.
+        DevMode.init(this)
+        BootDiag.log(applicationContext, "EngineService onCreate")
+        try { Native.status(); BootDiag.log(applicationContext, "engine native library loaded ok"); DevMode.log("engine") { "native library loaded ok" } }
+        catch (t: Throwable) { BootDiag.log(applicationContext, "engine native load FAILED: ${t.javaClass.name}: ${t.message}\n${t.stackTraceToString()}"); DevMode.log("engine") { "native load FAILED: ${t.javaClass.name}: ${t.message}" } }
         detailedTimingThread.scheduleWithFixedDelay({
             try {
                 if (detailedTiming && detailedTimingError.isEmpty() && !stopping.get())
@@ -478,6 +511,33 @@ class EngineService : Service() {
             }
             catch (_: Exception) { /* Retried on the next tick; the overlay shows timing as unavailable. */ }
         }, 3, 3, java.util.concurrent.TimeUnit.SECONDS)
+        // Substrate loads an extension when a process starts; the guest's own boot is the first such
+        // moment, so the files go in as soon as the agent answers and are in place for whatever the
+        // user launches afterwards. Nothing is written until a guest is actually running.
+        substrateThread.scheduleWithFixedDelay({
+            try {
+                if (!stopping.get() && SubstratePlugins.guestReady(binder)) {
+                    // A probe asked for from Settings runs on this tick; it needs the agent,
+                    // not a successful install, so diagnostics stay available either way.
+                    // Consumed only while the guest answers, so a request survives a stop.
+                    val requested = SubstratePlugins.takeProbeRequest(applicationContext)
+                    if (!substrateInstalled || requested) {
+                        val failure = if (substrateInstalled) ""
+                        else SubstratePlugins.install(applicationContext, binder)
+                        DevMode.log("substrate") { "install result=${if (failure.isEmpty()) "ok" else failure}" }
+                        if (failure.isEmpty()) {
+                            substrateInstalled = true
+                            // Ground truth for the devlog: which parts of the Substrate chain are on disk.
+                            DevMode.log("substrate") { "probe${if (requested) " (requested)" else ""}:\n${SubstratePlugins.probe(binder)}" }
+                        }
+                        else if (failure != substrateError) {
+                            substrateError = failure
+                            android.util.Log.w("EngineService", "substrate extensions: $failure")
+                        }
+                    }
+                }
+            } catch (_: Exception) { /* Retried on the next tick. */ }
+        }, 8, 8, java.util.concurrent.TimeUnit.SECONDS)
         // A fresh worker must not inherit a prior PID's error as current status.
         // The UI reads the exited PID's receipt/error; state markers and legacy
         // diagnostics remain available for cold recovery review.

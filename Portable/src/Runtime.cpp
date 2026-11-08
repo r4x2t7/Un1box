@@ -289,6 +289,9 @@ struct lt_runtime {
     lt::MotionClock motion_clock;
     uint64_t guest_sequence = 0, guest_deadline = 0;
     std::string guest_wire_id;
+    /* LT_GUEST_READ_FILE replies are raw file bytes; poll hex-encodes them so the
+     * output stays valid UTF-8 for every caller. */
+    bool guest_binary_reply = false;
     lt_guest_result guest_result{sizeof(lt_guest_result), 1, 0, 0, 0, 0, 0, {}};
     uint64_t guest_capabilities = 0;
     lt::PcmEpochQueue<lt::PcmPacket> pcm;
@@ -1148,6 +1151,51 @@ lt_status lt_runtime_guest_request(lt_runtime *r, const lt_guest_request *c, uin
             body = argument;
             argument.clear();
             break;
+        case LT_GUEST_PUT_FILE: {
+            op = "put";
+            lt::require(c->body && c->body_length, "put needs a body");
+            lt::require(c->body_length <= 128u << 10, "put body exceeds 128 KiB");
+            body.assign(static_cast<const char *>(c->body), c->body_length);
+            size_t space = argument.rfind(' ');
+            lt::require(space != std::string::npos && space + 1 < argument.size(), "put needs a path and a mode");
+            std::string path = argument.substr(0, space), mode = argument.substr(space + 1);
+            lt::require(path.size() > 1 && path[0] == '/' && path.size() <= 1024, "put path must be absolute");
+            lt::require(path.find('\n') == std::string::npos, "put path is one line");
+            lt::require(mode.size() <= 4 && mode.find_first_not_of("01234567") == std::string::npos,
+                        "put mode is octal");
+            break;
+        }
+        case LT_GUEST_READ_FILE: {
+            op = "getrange";
+            lt::require(!c->body || !c->body_length, "read takes no body");
+            size_t first = argument.find(' '), second = argument.find(' ', first == std::string::npos ? std::string::npos : first + 1);
+            lt::require(first != std::string::npos && second != std::string::npos && second + 1 < argument.size(),
+                        "read needs an offset, a limit and a path");
+            std::string offset = argument.substr(0, first), limit = argument.substr(first + 1, second - first - 1),
+                        path = argument.substr(second + 1);
+            unsigned long long offset_value = 0;
+            unsigned long limit_value = 0;
+            lt::require(!offset.empty() && offset.find_first_not_of("0123456789") == std::string::npos,
+                        "read offset is a number");
+            offset_value = std::stoull(offset);
+            lt::require(!limit.empty() && limit.find_first_not_of("0123456789") == std::string::npos,
+                        "read limit is a number");
+            limit_value = std::stoul(limit);
+            lt::require(offset_value <= 0x7fffffffffffffffull, "read offset is out of range");
+            lt::require(limit_value > 0 && limit_value <= 2000, "read limit is 1..2000");
+            lt::require(path.size() > 1 && path[0] == '/' && path.size() <= 1024, "read path must be absolute");
+            lt::require(path.find('\n') == std::string::npos, "read path is one line");
+            break;
+        }
+        case LT_GUEST_EXEC: {
+            op = "exec";
+            lt::require(!c->body || c->body_length <= 32u << 10, "exec stdin exceeds 32 KiB");
+            if (c->body && c->body_length)
+                body.assign(static_cast<const char *>(c->body), c->body_length);
+            lt::require(!argument.empty() && argument.size() <= 1024, "exec needs a command of 1..1024 bytes");
+            lt::require(argument.find('\n') == std::string::npos, "exec command is one line");
+            break;
+        }
         case LT_GUEST_LAUNCH_BUILTIN:
             lt::require(argument.rfind("com.apple.", 0) == 0, "only builtin app IDs allowed");
             op = "launch";
@@ -1175,6 +1223,7 @@ lt_status lt_runtime_guest_request(lt_runtime *r, const lt_guest_request *c, uin
             wire_id + " " + op + (argument.empty() ? "" : " " + argument) + "\n" + lt::base64_encode(body);
         lt::require(r->engine->agent_request(request.c_str()), "guest request not admitted", LT_AGAIN);
         r->guest_wire_id = wire_id;
+        r->guest_binary_reply = c->operation == LT_GUEST_READ_FILE;
         r->guest_result = {sizeof(lt_guest_result), 1, id, 1, 0, 0, 0, {}};
         r->guest_deadline = lt::now_ns() + uint64_t(c->timeout_ms ? std::min(c->timeout_ms, 65000u) : 65000u) * 1000000;
         *out = id;
@@ -1209,8 +1258,22 @@ lt_status lt_runtime_guest_poll(lt_runtime *r, uint64_t id, lt_guest_result *out
                 lt::require(body.size() < sizeof(r->guest_result.output), "guest output exceeds ABI limit");
                 r->guest_result.state = status == 0 ? 2 : 3;
                 r->guest_result.guest_status = int32_t(status);
-                r->guest_result.bytes = uint32_t(body.size());
-                memcpy(r->guest_result.output, body.c_str(), body.size() + 1);
+                if (r->guest_binary_reply && status == 0 && !body.empty()) {
+                    /* Binary file bytes cannot ride in the UTF-8 output buffer; hex-encode
+                     * (bytes then equals the hex length; file length is half of it). */
+                    static const char digits[] = "0123456789abcdef";
+                    std::string hex;
+                    hex.reserve(body.size() * 2);
+                    for (unsigned char byte : body) {
+                        hex.push_back(digits[byte >> 4]);
+                        hex.push_back(digits[byte & 0x0f]);
+                    }
+                    r->guest_result.bytes = uint32_t(hex.size());
+                    memcpy(r->guest_result.output, hex.c_str(), hex.size() + 1);
+                } else {
+                    r->guest_result.bytes = uint32_t(body.size());
+                    memcpy(r->guest_result.output, body.c_str(), body.size() + 1);
+                }
                 break;
             }
             if (r->guest_result.state == 1 && lt::now_ns() >= r->guest_deadline) {

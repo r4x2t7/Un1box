@@ -57,3 +57,24 @@ foreach(LT_LIBRARY IN LISTS LT_ENGINE_LIBRARIES)
         target_link_libraries(lighttouch_probe PRIVATE "${LT_NAME}")
     endif()
 endforeach()
+# The prebuilt engine libs carry no SONAME, so linking by path bakes the build
+# host's absolute path into DT_NEEDED and the device's linker then fails with
+# "library C:/... not found". AGP's C++ model rejects -l:name linker flags, so
+# fix the linked binaries in place instead: rewrite every DT_NEEDED that points
+# at an engine library to its bare filename (same-length NUL padding, dynstr
+# offsets untouched).
+find_program(LT_PATCH_PYTHON NAMES python3 python)
+if(LT_PATCH_PYTHON)
+    add_custom_command(TARGET un1box_jni POST_BUILD
+        COMMAND "${LT_PATCH_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/patch-needed.py"
+                "$<TARGET_FILE:un1box_jni>" "${LT_ENGINE_ROOT}/${ANDROID_ABI}"
+        VERBATIM)
+    if(TARGET lighttouch_probe)
+        add_custom_command(TARGET lighttouch_probe POST_BUILD
+            COMMAND "${LT_PATCH_PYTHON}" "${CMAKE_CURRENT_SOURCE_DIR}/patch-needed.py"
+                    "$<TARGET_FILE:lighttouch_probe>" "${LT_ENGINE_ROOT}/${ANDROID_ABI}"
+            VERBATIM)
+    endif()
+else()
+    message(WARNING "python not found: DT_NEEDED entries will keep build-host paths")
+endif()

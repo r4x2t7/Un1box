@@ -1207,6 +1207,46 @@ JNI(guestRequest) jobjectArray JNICALL Java_org_un1box_android_Native_guestReque
     auto output=env->NewObjectArray(2,env->FindClass("java/lang/String"),nullptr);
     env->SetObjectArrayElement(output,0,string(env,std::to_string(id)));env->SetObjectArrayElement(output,1,string(env,result(status,error)));return output;
 }
+JNI(guestPut) jobjectArray JNICALL Java_org_un1box_android_Native_guestPut(JNIEnv *env,jobject,jstring path,jint mode,jbyteArray bytes,jint timeout) {
+    std::lock_guard<std::mutex> lock(guard);Utf text(env,path);lt_error error=LT_INIT(lt_error);uint64_t id=0;
+    std::vector<unsigned char> body;
+    const jsize length=bytes?env->GetArrayLength(bytes):0;
+    if(length>0){
+        body.resize(size_t(length));
+        env->GetByteArrayRegion(bytes,0,length,reinterpret_cast<jbyte *>(body.data()));
+    }
+    char octal[8];snprintf(octal,sizeof(octal),"%o",unsigned(mode)&0777u);
+    std::string argument=text.text;argument+=' ';argument+=octal;
+    lt_guest_request request=LT_INIT(lt_guest_request);request.operation=LT_GUEST_PUT_FILE;request.timeout_ms=timeout;
+    request.argument=argument.c_str();request.body=body.empty()?nullptr:body.data();request.body_length=uint32_t(body.size());
+    auto status=runtime?lt_runtime_guest_request(runtime,&request,&id,&error):LT_AGAIN;
+    auto output=env->NewObjectArray(2,env->FindClass("java/lang/String"),nullptr);
+    env->SetObjectArrayElement(output,0,string(env,std::to_string(id)));env->SetObjectArrayElement(output,1,string(env,result(status,error)));return output;
+}
+JNI(guestRead) jobjectArray JNICALL Java_org_un1box_android_Native_guestRead(JNIEnv *env,jobject,jstring path,jlong offset,jint limit,jint timeout) {
+    std::lock_guard<std::mutex> lock(guard);Utf text(env,path);lt_error error=LT_INIT(lt_error);uint64_t id=0;
+    std::string argument=std::to_string(offset);argument+=' ';argument+=std::to_string(limit);argument+=' ';argument+=text.text;
+    lt_guest_request request=LT_INIT(lt_guest_request);request.operation=LT_GUEST_READ_FILE;request.timeout_ms=timeout;
+    request.argument=argument.c_str();
+    auto status=runtime?lt_runtime_guest_request(runtime,&request,&id,&error):LT_AGAIN;
+    auto output=env->NewObjectArray(2,env->FindClass("java/lang/String"),nullptr);
+    env->SetObjectArrayElement(output,0,string(env,std::to_string(id)));env->SetObjectArrayElement(output,1,string(env,result(status,error)));return output;
+}
+JNI(guestExec) jobjectArray JNICALL Java_org_un1box_android_Native_guestExec(JNIEnv *env,jobject,jstring command,jbyteArray stdinBytes,jint timeout) {
+    std::lock_guard<std::mutex> lock(guard);Utf text(env,command);lt_error error=LT_INIT(lt_error);uint64_t id=0;
+    std::vector<unsigned char> body;
+    const jsize length=stdinBytes?env->GetArrayLength(stdinBytes):0;
+    if(length>0){
+        body.resize(size_t(length));
+        env->GetByteArrayRegion(stdinBytes,0,length,reinterpret_cast<jbyte *>(body.data()));
+    }
+    lt_guest_request request=LT_INIT(lt_guest_request);request.operation=LT_GUEST_EXEC;request.timeout_ms=timeout;
+    request.argument=text.text.c_str();request.body=body.empty()?nullptr:body.data();request.body_length=uint32_t(body.size());
+    auto status=runtime?lt_runtime_guest_request(runtime,&request,&id,&error):LT_AGAIN;
+    auto output=env->NewObjectArray(2,env->FindClass("java/lang/String"),nullptr);
+    env->SetObjectArrayElement(output,0,string(env,std::to_string(id)));env->SetObjectArrayElement(output,1,string(env,result(status,error)));return output;
+}
+
 JNI(guestPoll) jobjectArray JNICALL Java_org_un1box_android_Native_guestPoll(JNIEnv *env,jobject,jlong id) {
     std::lock_guard<std::mutex> lock(guard);lt_error error=LT_INIT(lt_error);lt_guest_result completed=LT_INIT(lt_guest_result);
     auto status=runtime?lt_runtime_guest_poll(runtime,id,&completed,&error):LT_AGAIN;
