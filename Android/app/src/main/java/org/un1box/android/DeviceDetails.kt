@@ -20,8 +20,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -107,10 +109,16 @@ internal fun formatBytes(bytes: Long): String = when {
 /** A page of what Un1box knows about one device: its model and iOS, the hardware it stands for, the space it takes. */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-internal fun DeviceDetails(device: DeviceSummary, onClose: () -> Unit) {
+internal fun DeviceDetails(device: DeviceSummary, running: Boolean = false, onClose: () -> Unit) {
     val context = LocalContext.current
     var facts by remember { mutableStateOf<DeviceFacts?>(null) }
     var space by remember { mutableStateOf<DeviceFacts.Space?>(null) }
+    var jailbroken by remember(device.id) { mutableStateOf(Jailbreak.isJailbroken(context, device.id)) }
+    var jailbreakBusy by remember(device.id) { mutableStateOf(false) }
+    var jailbreakStage by remember(device.id) { mutableStateOf("") }
+    var jailbreakError by remember(device.id) { mutableStateOf("") }
+    var askingJailbreak by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(device.id) { facts = withContext(Dispatchers.IO) { runCatching { DeviceFacts.read(context, device.id) }.getOrNull() } }
     LaunchedEffect(device.id) { space = withContext(Dispatchers.IO) { runCatching { DeviceFacts.space(context, device.id) }.getOrNull() } }
     BackHandler(onBack = onClose)
@@ -154,6 +162,24 @@ internal fun DeviceDetails(device: DeviceSummary, onClose: () -> Unit) {
                             if (u.logBytes > 0) Fact("Engine logs", formatBytes(u.logBytes))
                         }
                     }
+                    val refusal = if (jailbroken) null else Jailbreak.unavailable(context, device.id, running)
+                    Section("Jailbreak", "Cydia, afc2 and Substrate on this device's own system volume; its apps and data stay.") {
+                        Fact("State", when {
+                            jailbroken -> "Jailbroken"
+                            jailbreakBusy -> "Working…"
+                            else -> refusal ?: "Not jailbroken"
+                        })
+                        if (jailbreakBusy) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Text(jailbreakStage.ifEmpty { "Starting firmwarekit…" }, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                        }
+                        if (jailbreakError.isNotEmpty()) Text(jailbreakError, Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        if (!jailbroken && refusal == null && !jailbreakBusy) TextButton(onClick = { askingJailbreak = true },
+                            modifier = Modifier.align(Alignment.CenterHorizontally).testTag("details_jailbreak")) { Text("Jailbreak this device") }
+                    }
                     Section("Un1box") {
                         f?.toolsSerial?.let { Fact("Guest tools", "Serial $it" + if (f.toolsVerdict == "good") "" else " (${f.toolsVerdict})") }
                         f?.created?.let { created ->
@@ -164,6 +190,25 @@ internal fun DeviceDetails(device: DeviceSummary, onClose: () -> Unit) {
                         if (device.dirty) Fact("State", "Not shut down cleanly; it recovers at the next start")
                     }
                     Spacer(Modifier.height(24.dp))
+                    if (askingJailbreak) AlertDialog(
+                        onDismissRequest = { askingJailbreak = false },
+                        icon = { Icon(LtIcons.Bag, null) },
+                        title = { Text("Jailbreak ${device.name}?", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center) },
+                        text = { Text("Adds Cydia, afc2 and Substrate to the device as it is, so iOS loads the libraries they bring. About 8 MB of jailbreak files come from Legacy iOS Kit's copy on GitHub; writing them into the system volume takes a few minutes, and the device has to stay stopped.") },
+                        confirmButton = { Button(onClick = {
+                            askingJailbreak = false; jailbreakBusy = true; jailbreakError = ""; jailbreakStage = ""
+                            scope.launch {
+                                try {
+                                    val said = Jailbreak.run(context, device.id) { jailbreakStage = it }
+                                    jailbreakStage = said
+                                    jailbroken = true
+                                } catch (e: Exception) {
+                                    jailbreakError = e.message ?: "Jailbreak failed"
+                                }
+                                jailbreakBusy = false
+                            }
+                        }, modifier = Modifier.testTag("confirm_jailbreak")) { Text("Jailbreak") } },
+                        dismissButton = { TextButton(onClick = { askingJailbreak = false }) { Text("Cancel") } })
                 }
             }
         }

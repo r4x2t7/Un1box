@@ -59,6 +59,27 @@ internal object I18nZh {
         put("Range", "范围")
         put("Ready", "就绪")
         put("Retry", "重试")
+        put("Developer mode", "开发者模式")
+        put("Detailed developer log", "详细开发者日志")
+        put("Records app, engine, preparation, store and substrate events, plus a state snapshot every 5 seconds. Buffered on a background thread; switched off it costs nothing.", "记录应用、引擎、准备、商店与插件事件，并每 5 秒记一次状态快照；后台线程缓冲写入，关闭时零开销。")
+        put("Export all logs", "导出全部日志")
+        put("Exporting logs…", "正在导出日志…")
+        put("One zip in Download/Un1box: developer log, firmwarekit and jailbreak logs, boot diagnostics, logcat, settings and device info", "在 Download/Un1box 生成一个 zip：开发者日志、firmwarekit 与越狱日志、启动诊断、logcat、设置与设备信息")
+        put("Run guest diagnostics", "在客户机里跑诊断")
+        put("Asks the running guest for its Substrate layout, dpkg entry and launchd jobs, and writes the reply into the developer log", "向运行中的客户机查询 Substrate 目录布局、dpkg 记录与 launchd 任务，结果写进开发者日志")
+        put("Requested; the result lands in the developer log within ~10 s", "已请求，约 10 秒后结果写入开发者日志")
+        put("Frame pacing off (A/B)", "关闭帧 pacing（A/B 对比）")
+        put("Posts frames as they arrive instead of pacing them. Applies at the next guest start.", "帧到达即投递，不做节奏控制。下次启动客户机时生效。")
+        put("CPU upscaling (A/B)", "CPU 放大（A/B 对比）")
+        put("Uses the full-resolution CPU scaler instead of the display hardware. Slower; for A/B comparisons. Applies at the next guest start.", "改用全分辨率 CPU 缩放，不走显示硬件；更慢，仅供 A/B 对比。下次启动客户机时生效。")
+        put("Ignore fast-core preference", "忽略大核优先")
+        put("Stops the engine preferring the phone's prime cores. Applies at the next guest start.", "不再让引擎优先使用手机的超大核。下次启动客户机时生效。")
+        put("Disable ADPF hints", "关闭 ADPF 性能提示")
+        put("Turns off Android's performance hint session. Applies at the next guest start.", "关闭 Android 的 performance hint 会话。下次启动客户机时生效。")
+        put("Still loading · startup diagnostics", "仍在加载 · 启动诊断")
+        put("Remove from device", "从设备移除")
+        put("Remove", "移除")
+        put("The app and its data are deleted from the device. You can install it again from the Legacy Store.", "应用及其数据会从设备中删除。之后可以从经典商店重新安装。")
         put("Saved", "已保存")
         put("Share", "分享")
         put("Sharp", "锐利")
@@ -155,6 +176,21 @@ internal object I18nZh {
         put("Guest CPU", "客户机 CPU")
         put("Installed", "已安装")
         put("Jailbreak", "越狱")
+        put("Jailbroken", "已越狱")
+        put("Jailbreak failed", "越狱失败")
+        put("Jailbreak this device", "越狱这台设备")
+        put("Already jailbroken", "已经越狱")
+        put("Not jailbroken", "未越狱")
+        put("Working…", "处理中…")
+        put("Starting firmwarekit…", "正在启动 firmwarekit…")
+        put("Stop the device before jailbreaking it", "先停止设备再越狱")
+        put("This device's lock is unreadable", "读不到这台设备的锁文件")
+        put("Cydia, afc2 and Substrate on this device's own system volume; its apps and data stay.",
+            "把 Cydia、afc2 与 Substrate 写进这台设备自己的系统卷，应用和数据都保留。")
+        put("Adds Cydia, afc2 and Substrate to the device as it is, so iOS loads the libraries they bring. About 8 MB of jailbreak files come from Legacy iOS Kit's copy on GitHub; writing them into the system volume takes a few minutes, and the device has to stay stopped.",
+            "把 Cydia、afc2 与 Substrate 加进现有设备，让 iOS 加载它们带来的库。约 8 MB 的越狱文件取自 GitHub 上 Legacy iOS Kit 的存档，写进系统卷需要几分钟，过程中设备必须保持停止状态。")
+        put("Not on iPod touch 2G yet: Substrate's launchd hook hangs it after the first restart",
+            "iPod touch 2G 暂不支持：Substrate 的 launchd 钩子会让它在第一次重启之后卡死")
         put("Local IPA", "本地 IPA")
         put("Lock hold", "持锁")
         put("Lock wait", "锁等待")
@@ -757,6 +793,7 @@ internal object I18nZh {
         Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\. Try again after iOS finishes starting\\.\$") to "\$1 失败（设备错误 \$2）。请等 iOS 完成启动后再试。",
         Regex("^(.+?)(?: failed)? \\(device error (-?\\d+)\\)\\.\$") to "\$1 失败（设备错误 \$2）。",
         Regex("^Force stop (.+)\\?\$") to "强制停止 \$1？",
+        Regex("^Jailbreak (.+)\\?\$") to "越狱 \$1？",
         Regex("^(.+) is truncated\$") to "\$1 已被截断",
         Regex("^(.+) is not a guest package\$") to "\$1 不是客户机软件包",
         Regex("^(.+) exceeds the guest package limit\$") to "\$1 超出客户机软件包上限",
@@ -810,8 +847,15 @@ internal object I18nZh {
         Regex("^Profiling (.+)\$") to "正在分析 \$1",
         Regex("^Saved profile: (.+)\$") to "已保存性能数据：\$1",
         Regex("^Choose iOS for (.+)\$") to "为 \$1 选择 iOS",
+        Regex("^Saved to (.+); send the zip for analysis\$") to "已保存到 \$1；把这个 zip 发来分析",
+        Regex("^Saved to (.+)\$") to "已保存到 \$1",
+        Regex("^Export failed: (.+)\$") to "导出失败：\$1",
+        Regex("^Remove (.+)\\?\$") to "移除 \$1？",
         Regex("^Tested: (.+)\$") to "已验证：\$1",
-        Regex("^ · (.+) more to try\$") to " · 还有 \$1 个可尝试",
+        // More specific than "iOS X to Y" below: the version list ends in " · N more to try",
+        // which the range rule would otherwise read as a second version ("N more 至 try").
+        // The tested-versions sentence passes its captured tail through here recursively.
+        Regex("^(.+) · (\\d+) more to try\$") to "\$1 · 还有 \$2 个可尝试",
         Regex("^iOS (.+) to (.+)\$") to "iOS \$1 至 \$2",
         Regex("^Show (.+) beta versions\$") to "显示 \$1 个测试版",
         Regex("^(.+), iOS (.+)\$") to "\$1，iOS \$2",

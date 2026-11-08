@@ -196,6 +196,7 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
     private val sensors by lazy { getSystemService(SensorManager::class.java) }
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+            BootDiag.log(this@MainActivity, "engine onServiceConnected")
             workerEvidenceDelivery.advance()
             engine = IEngine.Stub.asInterface(binder)
             refreshDevices()
@@ -215,9 +216,12 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
             }
             displayView?.attachActiveSurface()
         }
-        override fun onServiceDisconnected(name: ComponentName) { workerExited() }
+        override fun onServiceDisconnected(name: ComponentName) { BootDiag.log(this@MainActivity, "engine onServiceDisconnected"); workerExited() }
+        override fun onBindingDied(name: ComponentName) { BootDiag.log(this@MainActivity, "engine onBindingDied"); workerExited() }
+        override fun onNullBinding(name: ComponentName) { BootDiag.log(this@MainActivity, "engine onNullBinding"); workerExited() }
     }
     private var pollInFlight = false
+    private var devPollTick = 0
     // One thread for the status polls, not a new one twice a second: the poll runs for as long as the app is
     // open, and creating a thread for each turn of it was a wake, a stack and a teardown every half second
     // for as long as the guest runs -- including the whole of its boot.
@@ -239,6 +243,8 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
                 try { firmwareState = observedFirmware?.status() } catch (e: RemoteException) { firmwareFailure = e.message ?: "Firmware worker exited" }
                 handler.post {
                     pollInFlight = false
+                    if (DevMode.logging && ++devPollTick % 10 == 0)
+                        DevMode.log("perf") { "state=$status detail=$detail workerPid=$workerPid sessionOwned=$sessionOwned" }
                     if (!active) return@post
                     if (engine?.asBinder() == observedEngine?.asBinder()) {
                         engineState?.let { b ->
@@ -309,6 +315,10 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
     private val pickGuestToolsFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) copyAsset(uri, "guest.itpack") }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        BootDiag.install(applicationContext, "main")
+        DevMode.init(this)
+        BootDiag.log(applicationContext, "MainActivity onCreate")
+        DevMode.log("app") { "MainActivity onCreate, language=${I18n.choice()}" }
         // The UI language is picked before anything draws: the phone's, unless Settings chose one.
         I18n.onSystemLanguage(resources.configuration.locales[0]?.toLanguageTag())
         I18n.choose(settings.language)
@@ -344,6 +354,7 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
             } catch (_: Exception) { /* The Store falls back to the running guest's own report. */ }
         }, "store-targets").start()
         bindWorker()
+        BootDiag.log(applicationContext, "bindWorker requested; bound=$bound")
         setContent {
             val guestInFront = overlay == null && !devicesOpen && !licensesOpen && !preparationOpen && status == "running"
             LaunchedEffect(guestInFront) { preferSixtyHertz(guestInFront) }
@@ -383,12 +394,24 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
                 } }
                 val snackbar = remember { SnackbarHostState() }
                 LaunchedEffect(notice) { if (notice.isNotEmpty()) { snackbar.showSnackbar(notice); notice = "" } }
+                var loadDiagShown by remember { mutableStateOf(false) }
+                LaunchedEffect(overlay, recordsLoaded) {
+                    if (overlay == Screen.LOADING && !recordsLoaded) { kotlinx.coroutines.delay(15000); loadDiagShown = true }
+                    else loadDiagShown = false
+                }
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     // The guest layout stays composed under full-page overlays so its Surface and lease survive them.
                     if (base == Screen.FULLSCREEN) FullscreenScreen(this@MainActivity, guestSurface) else HomeScreen(this@MainActivity, guestSurface)
                     when (overlay) {
                         Screen.LOADING -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                            if (loadDiagShown) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Still loading · startup diagnostics", style = MaterialTheme.typography.titleSmall)
+                                Spacer(Modifier.height(10.dp))
+                                Text(BootDiag.tail(this@MainActivity), style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f), modifier = Modifier.padding(horizontal = 24.dp))
+                                Spacer(Modifier.height(14.dp))
+                                CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
+                            } else CircularProgressIndicator(Modifier.size(32.dp), strokeWidth = 3.dp)
                         }
                         Screen.SETUP -> SetupWizard(setup, canCancel = records.isNotEmpty(),
                             onPickFolder = { pickFolder.launch(null) }, onPickSystem = { pickSystem.launch(arrayOf("application/octet-stream", "*/*")) },
@@ -396,7 +419,11 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
                             onCreate = ::createDevice, onPrepare = { openPreparation() },
                             onFinish = { start -> overlay = null; if (start) startGuest() }, onCancel = { overlay = null })
                         Screen.SETTINGS -> SettingsScreen(this@MainActivity) { overlay = null }
-                        Screen.DETAILS -> detailsDevice?.let { DeviceDetails(it) { overlay = null; openDevices() } }
+                        Screen.DETAILS -> detailsDevice?.let { d ->
+                            DeviceDetails(d, running = d.selected && status in listOf("running", "starting")) {
+                                overlay = null; openDevices()
+                            }
+                        }
                         Screen.STORE -> StoreScreen(store, running = status == "running" && muxSocket.isNotEmpty(),
                             onPickLocal = { localIpa.launch(arrayOf("application/octet-stream", "*/*")) }) { overlay = null }
                         Screen.HITCH -> HitchInspector(hitchData, hitchError, onResume = ::closeHitch, onSave = ::saveHitch, saving = hitchSaving,
@@ -979,9 +1006,10 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
         }, "prepare-bootrom").start()
     }
     private fun refreshDevices(afterDelete: Boolean = false) {
+        BootDiag.log(this, "refreshDevices; engine=${engine != null}")
         Thread({
             try {
-                var loaded = engine?.records()?.toList() ?: return@Thread
+                var loaded = engine?.records()?.toList() ?: run { BootDiag.log(this@MainActivity, "refreshDevices: engine null, giving up (records never load)"); return@Thread }
                 // Earlier builds named devices after their firmware id ("n72ap-7E18 prepared"); give those the friendly default once.
                 if (firmwareTargets.isNotEmpty()) {
                     val names = loaded.mapNotNull { it.getString("name") }.toMutableList()
@@ -995,9 +1023,14 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
                 }
                 handler.post {
                     records = loaded; recordsLoaded = true
+                    BootDiag.log(this@MainActivity, "records loaded: ${loaded.size} devices")
                     if (afterDelete && loaded.isEmpty()) { setup.reset(firstRun = true); overlay = Screen.SETUP }
                 }
             } catch (e: RemoteException) { handler.post { error = "Device library unavailable: ${e.message}" } }
+            catch (t: Throwable) {
+                BootDiag.log(this@MainActivity, "refreshDevices failed: ${t.javaClass.name}: ${t.message}\n${t.stackTraceToString()}")
+                handler.post { error = "Device library failed: ${t.message}"; recordsLoaded = true }
+            }
         }, "device-library").start()
     }
     private fun bindWorker() {
@@ -1035,6 +1068,7 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
         }, "worker-retained-error").start()
     }
     private fun startGuest(coldRecovery: Boolean = false, retainedRequest: GuestStartRequest? = null) {
+        DevMode.log("guest") { "startGuest coldRecovery=$coldRecovery retained=${retainedRequest != null}" }
         if (engineRestarting) return
         val request = retainedRequest ?: GuestStartRequest(
             selected?.id ?: run { error = "Select a device"; status = "stopped"; return }, coldRecovery)
@@ -1080,6 +1114,7 @@ class MainActivity : ComponentActivity(), SensorEventListener, GuestHost {
         }, "guest-start").start()
     }
     private fun stopGuest() {
+        DevMode.log("guest") { "stopGuest status=$status" }
         val worker = engine ?: return
         engineExpectedExit = true; status = "stopping"; stopSensors()
         Thread({

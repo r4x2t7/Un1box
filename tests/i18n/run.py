@@ -52,6 +52,8 @@ KEEP_PATTERNS = [
     # numbers, units and the punctuation a sentence is assembled from
     r"^\d+(\.\d+)? ?(KB|MB|GB|MiB)$", r"^%.*", r"^[0-9A-Za-z ,.:()/'×-]{0,2}$", r"^(ms|FPS)$",
     r"^≤.*ms$", r"^>.*ms$", r"^(of|and|or|else) ?$", r"^[)(]?\$", r"\$$",
+    # BootDiag / DevMode traces are written to a log file, never drawn on screen
+    r"^(engine |MainActivity onCreate|bindWorker requested|refreshDevices|(?:fetch|install) failed: )[\s\S]*",
     # Kotlin that happens to sit inside a literal: an interpolation or a lambda
     r".*[{}].*", r".*->.*", r".*\.let .*",
 ]
@@ -244,7 +246,7 @@ def main():
     sources = sorted(SRC.glob("*.kt"))
     strings = {}
     for path in sources:
-        if path.name in ("I18nZh.kt", "I18n.kt", "LocalizedText.kt"):
+        if path.name in ("I18nZh.kt", "I18n.kt", "LocalizedText.kt", "DevMode.kt"):
             continue
         for line, body in literals(path):
             if showable(body):

@@ -1,8 +1,12 @@
 package org.un1box.android
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -107,6 +111,37 @@ internal fun SettingsScreen(host: GuestHost, onBack: () -> Unit) {
                     if (host.selected != null && !host.active) ActionRow(LtIcons.History, "Recover retained state",
                         "Start ${host.selected?.name} from its saved data after an unclean shutdown, keeping diagnostics", enabled = !host.busy, tag = "recover_guest") { host.recover(); onBack() }
                 }
+                Group("Developer mode") {
+                    var exporting by remember { mutableStateOf(false) }
+                    var exported by remember { mutableStateOf<String?>(null) }
+                    SwitchRow(LtIcons.Code, "Detailed developer log",
+                        "Records app, engine, preparation, store and substrate events, plus a state snapshot every 5 seconds. Buffered on a background thread; switched off it costs nothing.",
+                        DevMode.enabled, "dev_log_toggle") { DevMode.setEnabled(context, it) }
+                    ActionRow(LtIcons.Save, if (exporting) "Exporting logs…" else "Export all logs",
+                        exported?.let { "Saved to $it; send the zip for analysis" }
+                            ?: "One zip in Download/Un1box: developer log, firmwarekit and jailbreak logs, boot diagnostics, logcat, settings and device info",
+                        enabled = !exporting, tag = "dev_export") {
+                        exporting = true
+                        Thread({
+                            val result = runCatching { DevMode.export(context.applicationContext) }
+                            Handler(Looper.getMainLooper()).post {
+                                exporting = false
+                                exported = result.getOrNull()
+                                Toast.makeText(context, I18n.t(result.fold({ "Saved to $it" }, { "Export failed: ${it.message}" })), Toast.LENGTH_LONG).show()
+                            }
+                        }, "dev-export").start()
+                    }
+                    ActionRow(LtIcons.Play, "Run guest diagnostics",
+                        "Asks the running guest for its Substrate layout, dpkg entry and launchd jobs, and writes the reply into the developer log",
+                        enabled = host.running, tag = "dev_probe") {
+                        SubstratePlugins.requestProbe(context.applicationContext)
+                        Toast.makeText(context, I18n.t("Requested; the result lands in the developer log within ~10 s"), Toast.LENGTH_SHORT).show()
+                    }
+                    DevEnvSwitch(context, "LT_FRAME_PACING", "Frame pacing off (A/B)", "Posts frames as they arrive instead of pacing them. Applies at the next guest start.")
+                    DevEnvSwitch(context, "LT_PRESENT_SCALE", "CPU upscaling (A/B)", "Uses the full-resolution CPU scaler instead of the display hardware. Slower; for A/B comparisons. Applies at the next guest start.", "cpu")
+                    DevEnvSwitch(context, "LT_ENGINE_CPUS", "Ignore fast-core preference", "Stops the engine preferring the phone's prime cores. Applies at the next guest start.")
+                    DevEnvSwitch(context, "LT_ADPF", "Disable ADPF hints", "Turns off Android's performance hint session. Applies at the next guest start.")
+                }
                 Group("Device") {
                     ActionRow(LtIcons.Puzzle, "Update guest tools", host.selected?.let { "Install a newer .itpack into ${it.name}; it applies at the next start" } ?: "Select a device first",
                         enabled = host.selected != null && !host.active && !host.busy) { host.pickGuestTools() }
@@ -123,6 +158,16 @@ internal fun SettingsScreen(host: GuestHost, onBack: () -> Unit) {
                 Spacer(Modifier.height(24.dp))
             }
         }
+    }
+}
+
+/** One files/debug-env key as a switch; EngineService injects it when a guest starts. */
+@Composable
+private fun DevEnvSwitch(context: Context, key: String, title: String, subtitle: String, onValue: String = "off") {
+    var checked by remember(key) { mutableStateOf(DevMode.debugEnv(context, key) == onValue) }
+    SwitchRow(LtIcons.Speed, title, subtitle, checked, "dev_env_${key.lowercase()}") {
+        checked = it
+        DevMode.setDebugEnv(context, key, if (it) onValue else null)
     }
 }
 
